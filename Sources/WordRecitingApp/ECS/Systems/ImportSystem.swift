@@ -28,6 +28,12 @@ struct ImportSystem: System {
         for tc in context.textComponents {
             try world.registry.upsertComponent(db, tc)
         }
+        for lm in context.lemmaMetas {
+            try world.registry.upsertComponent(db, lm)
+        }
+        for ts in context.tagSets {
+            try world.registry.upsertComponent(db, ts)
+        }
         for ss in context.scheduleStates {
             try world.registry.upsertComponent(db, ss)
         }
