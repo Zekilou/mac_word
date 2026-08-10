@@ -8,20 +8,27 @@ struct ContentView: View {
     @State private var section: AppSection = .creation
 
     enum AppSection: String, CaseIterable, Identifiable {
+        case decks = "词库"
         case creation = "创作"
         case study = "背诵"
         case analytics = "分析"
         var id: String { rawValue }
-        var enabled: Bool { self == .creation }
+        var enabled: Bool {
+            switch self {
+            case .decks, .creation: return true
+            case .study, .analytics: return false
+            }
+        }
         var hint: String {
             switch self {
-            case .creation: return ""
+            case .decks, .creation: return ""
             case .study: return "阶段二"
             case .analytics: return "阶段三"
             }
         }
         var icon: String {
             switch self {
+            case .decks: return "rectangle.stack"
             case .creation: return "square.and.pencil"
             case .study: return "book"
             case .analytics: return "chart.bar"
@@ -121,6 +128,7 @@ struct ContentView: View {
     @ViewBuilder
     private var content: some View {
         switch section {
+        case .decks: DeckManagerView(world: world)
         case .creation: CreationView(world: world)
         case .study: placeholder("背诵模块阶段二上线")
         case .analytics: placeholder("分析模块阶段三上线")

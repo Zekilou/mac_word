@@ -33,3 +33,12 @@ struct StoredArticle: Sendable, Equatable {
     let spans: [SpanInfo]
     let generatorId: String
 }
+
+/// 词库摘要：Deck 列表项。
+struct DeckSummary: Sendable, Equatable, Identifiable {
+    let id: EntityID
+    let name: String
+    let sourceKind: String?
+    let cardCount: Int
+    let createdAt: Date
+}
