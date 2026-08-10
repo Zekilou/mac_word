@@ -16,7 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
 
-        let hostingView = NSHostingView(rootView: ContentView())
+        let world = makeWorld()
+        let hostingView = NSHostingView(rootView: ContentView(world: world))
         hostingView.translatesAutoresizingMaskIntoConstraints = false
         visualEffectView.addSubview(hostingView)
         NSLayoutConstraint.activate([
@@ -40,11 +41,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         self.window = window
     }
-}
 
-struct ContentView: View {
-    var body: some View {
-        Text("Hello, WordReciting")
-            .padding()
+    /// 构建持久化 World：~/Library/Application Support/WordRecitingApp/db.sqlite。
+    /// 文件 DB 失败时回退 in-memory（保证 app 可启动）。
+    private func makeWorld() -> World {
+        do {
+            let fm = FileManager.default
+            let support = try fm.url(
+                for: .applicationSupportDirectory, in: .userDomainMask,
+                appropriateFor: nil, create: true)
+            let dir = support.appendingPathComponent("WordRecitingApp", isDirectory: true)
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            let dbPath = dir.appendingPathComponent("db.sqlite").path
+            let appDB = try AppDatabase.file(dbPath)
+            return World(database: appDB)
+        } catch {
+            // 回退：进程内内存库（关 app 即丢，仅用于兜底启动）
+            let appDB = (try? AppDatabase.inMemory()) ?? (try! AppDatabase.inMemory())
+            return World(database: appDB)
+        }
     }
 }

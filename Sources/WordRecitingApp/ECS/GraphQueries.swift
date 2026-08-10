@@ -213,18 +213,76 @@ final class GraphQueries: @unchecked Sendable {
             }
         }
     }
-}
 
-/// 子图：节点集合 + 两端均在集合内的边。
-struct Subgraph: Sendable, Equatable {
-    let nodeIds: Set<EntityID>
-    let edges: [EdgeRecord]
-}
+    // MARK: - 7. 生成历史列表
 
-/// 同义词查询结果：对端 lemma id + 表面形式 + 权重 + 来源类型。
-struct SynonymInfo: Sendable, Equatable {
-    let lemmaId: EntityID
-    let surfaceForm: String?
-    let weight: Double?
-    let sourceType: String?
+    /// 最近 N 篇指定模式 Article 的摘要（id / 创建时间 / 正文预览 / 生成器）。
+    /// @ai: UI 历史侧栏用此方法，禁止业务代码手写 ORDER BY created_at。
+    func recentArticles(mode: GenerationMode, limit: Int) throws -> [ArticleHistoryItem] {
+        try database.dbWriter.read { db in
+            let sql = """
+            SELECT n.id, n.created_at, t.text_a, gm.generator_id
+            FROM nodes n
+            JOIN comp_generation_meta gm ON gm.entity_id = n.id
+            LEFT JOIN comp_text t ON t.entity_id = n.id
+            WHERE n.kind = 'article' AND gm.mode = ?
+            ORDER BY n.created_at DESC LIMIT ?
+            """
+            let rows = try Row.fetchAll(db, sql: sql, arguments: [mode.rawValue, limit])
+            return rows.map { row in
+                ArticleHistoryItem(
+                    id: row["id"],
+                    createdAt: row["created_at"],
+                    bodyPreview: String((row["text_a"] ?? "").prefix(100)),
+                    generatorId: row["generator_id"] ?? "")
+            }
+        }
+    }
+
+    // MARK: - 8. 回看单篇 Article（body + highlighted_in spans）
+
+    /// 按 id 加载 Article 正文与其全部 highlighted_in span（含权重 / 来源）。
+    /// @ai: replacedFrom 不落库，故回看 span 的 replacedFrom 恒为 nil。
+    func loadArticle(id: EntityID) throws -> StoredArticle? {
+        try database.dbWriter.read { db in
+            let header = try Row.fetchOne(
+                db,
+                sql: """
+                SELECT n.created_at AS created_at, t.text_a AS body, gm.generator_id AS generator_id
+                FROM nodes n
+                LEFT JOIN comp_text t ON t.entity_id = n.id
+                LEFT JOIN comp_generation_meta gm ON gm.entity_id = n.id
+                WHERE n.id = ? AND n.kind = 'article'
+                """,
+                arguments: [id])
+            guard let header, let body: String = header["body"] else { return nil }
+            let createdAt: Date = header["created_at"]
+            let generatorId: String = header["generator_id"] ?? ""
+
+            let spanRows = try Row.fetchAll(
+                db,
+                sql: """
+                SELECT e.src_id AS lemma_id, s.surface_form, s.start, s.end, s.is_target,
+                       w.weight_double AS weight, w.source_type AS source_type
+                FROM edges e
+                JOIN comp_edge_span s ON s.entity_id = e.id
+                LEFT JOIN comp_edge_weighted w ON w.entity_id = e.id
+                WHERE e.dst_id = ? AND e.rel_type = 'highlighted_in'
+                ORDER BY s.start
+                """,
+                arguments: [id])
+            let spans: [SpanInfo] = spanRows.map { row in
+                SpanInfo(
+                    start: row["start"], end: row["end"],
+                    isTarget: row["is_target"],
+                    lemmaId: row["lemma_id"],
+                    surfaceForm: row["surface_form"] ?? "",
+                    replacedFrom: nil,
+                    weight: row["weight"], sourceType: row["source_type"])
+            }
+            return StoredArticle(
+                id: id, createdAt: createdAt, body: body,
+                spans: spans, generatorId: generatorId)
+        }
+    }
 }
