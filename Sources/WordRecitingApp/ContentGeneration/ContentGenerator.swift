@@ -23,6 +23,26 @@ struct SpanInfo: Sendable, Equatable {
     let surfaceForm: String
     /// 替换前的原词；nil 表示未替换（原文中本身就是目标词）。
     let replacedFrom: String?
+    /// 同义词权重（替换时来自 comp_edge_weighted；nil 表示未替换或无权重）。
+    let weight: Double?
+    /// 同义词来源类型（user / wordnet / cedict；nil 表示未替换或无来源）。
+    let sourceType: String?
+
+    init(
+        start: Int, end: Int, isTarget: Bool,
+        lemmaId: EntityID?, surfaceForm: String,
+        replacedFrom: String?,
+        weight: Double? = nil, sourceType: String? = nil
+    ) {
+        self.start = start
+        self.end = end
+        self.isTarget = isTarget
+        self.lemmaId = lemmaId
+        self.surfaceForm = surfaceForm
+        self.replacedFrom = replacedFrom
+        self.weight = weight
+        self.sourceType = sourceType
+    }
 }
 
 /// 内容生成器协议：造文 / 改写。

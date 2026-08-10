@@ -59,7 +59,8 @@ struct RuleBasedGenerator: ContentGenerator {
                     start: startOffset, end: endOffset,
                     isTarget: true, lemmaId: lid,
                     surfaceForm: result.surfaceForm,
-                    replacedFrom: result.replacedFrom))
+                    replacedFrom: result.replacedFrom,
+                    weight: result.weight, sourceType: result.sourceType))
             }
             lastEnd = w.end
         }
@@ -76,6 +77,8 @@ struct RuleBasedGenerator: ContentGenerator {
         let surfaceForm: String
         let lemmaId: EntityID?
         let replacedFrom: String?
+        let weight: Double?
+        let sourceType: String?
     }
 
     private func processWord(
@@ -96,12 +99,12 @@ struct RuleBasedGenerator: ContentGenerator {
             }
         }
         guard let lid = lemmaId else {
-            return WordResult(surfaceForm: word, lemmaId: nil, replacedFrom: nil)
+            return WordResult(surfaceForm: word, lemmaId: nil, replacedFrom: nil, weight: nil, sourceType: nil)
         }
 
         // 目标词直接出现 → 记 span 不替换
         if targets.contains(lid) {
-            return WordResult(surfaceForm: word, lemmaId: lid, replacedFrom: nil)
+            return WordResult(surfaceForm: word, lemmaId: lid, replacedFrom: nil, weight: nil, sourceType: nil)
         }
 
         // 查同义词：过滤 weight ≥ synonymDistance，按 source_type 优先级 + weight 降序
@@ -118,10 +121,11 @@ struct RuleBasedGenerator: ContentGenerator {
                 let raw = syn.surfaceForm ?? lower
                 let adjusted = Self.applyCase(original: word, replacement: raw)
                 return WordResult(
-                    surfaceForm: adjusted, lemmaId: syn.lemmaId, replacedFrom: word)
+                    surfaceForm: adjusted, lemmaId: syn.lemmaId, replacedFrom: word,
+                    weight: syn.weight, sourceType: syn.sourceType)
             }
         }
-        return WordResult(surfaceForm: word, lemmaId: nil, replacedFrom: nil)
+        return WordResult(surfaceForm: word, lemmaId: nil, replacedFrom: nil, weight: nil, sourceType: nil)
     }
 
     // MARK: - 简单词形还原（英文后缀剥离）

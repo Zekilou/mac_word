@@ -126,9 +126,13 @@ final class ImportSystemTests: XCTestCase {
     // MARK: - 空壳 System 可被 World.run 调用
 
     func testShellSystemsAreCallable() throws {
-        // 三个空壳 System 应可被 World.run 调用且不抛错（无匹配 entity 也能跑）
+        // Study/Analytics 空壳应可被 World.run 调用且不抛错；
+        // ContentGenSystem 已实现，用空文章验证可调用。
         try world.run(StudySystem(), context: ())
-        try world.run(ContentGenSystem(), context: ())
+        let emptyArticle = GeneratedArticle(
+            body: "", spans: [], generatorId: "test", tier: .fast)
+        try world.run(ContentGenSystem(), context: ContentGenContext(
+            article: emptyArticle, targetLemmas: [], sourceText: nil, topic: nil))
         try world.run(AnalyticsSystem(), context: ())
     }
 }
