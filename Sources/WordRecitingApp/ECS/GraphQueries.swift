@@ -162,10 +162,69 @@ final class GraphQueries: @unchecked Sendable {
             return result
         }
     }
+
+    // MARK: - 5. 按 text_a 查 Lemma
+
+    /// 按 comp_text.text_a 精确匹配 Lemma 节点，返回 entity_id。
+    /// @ai: 内容生成器用此方法把源文中的词映射到 Lemma EntityID。
+    func findLemmaId(byTextA textA: String) throws -> EntityID? {
+        try database.dbWriter.read { db in
+            try String.fetchOne(
+                db,
+                sql: """
+                SELECT t.entity_id
+                FROM comp_text t
+                JOIN nodes n ON n.id = t.entity_id
+                WHERE t.text_a = ? AND n.kind = 'lemma'
+                LIMIT 1
+                """,
+                arguments: [textA])
+        }
+    }
+
+    // MARK: - 6. 同义词（maps_to + comp_edge_weighted）
+
+    /// 返回某 lemma 的所有 maps_to 同义词，附带权重 / source_type / 表面形式。
+    /// 路径：edges(rel_type='maps_to') JOIN comp_edge_weighted JOIN comp_text(对端)。
+    func synonyms(of lemmaId: EntityID) throws -> [SynonymInfo] {
+        try database.dbWriter.read { db in
+            let sql = """
+            SELECT
+                CASE WHEN e.src_id = ? THEN e.dst_id ELSE e.src_id END AS synonym_id,
+                ew.weight_double AS weight,
+                ew.source_type   AS source_type,
+                t.text_a         AS surface_form
+            FROM edges e
+            LEFT JOIN comp_edge_weighted ew
+              ON ew.entity_id = e.id
+            LEFT JOIN comp_text t
+              ON t.entity_id = CASE WHEN e.src_id = ? THEN e.dst_id ELSE e.src_id END
+            WHERE (e.src_id = ? OR e.dst_id = ?) AND e.rel_type = 'maps_to'
+            """
+            let rows = try Row.fetchAll(
+                db, sql: sql,
+                arguments: StatementArguments([lemmaId, lemmaId, lemmaId, lemmaId]))
+            return rows.map { row in
+                SynonymInfo(
+                    lemmaId: row["synonym_id"],
+                    surfaceForm: row["surface_form"],
+                    weight: row["weight"],
+                    sourceType: row["source_type"])
+            }
+        }
+    }
 }
 
 /// 子图：节点集合 + 两端均在集合内的边。
 struct Subgraph: Sendable, Equatable {
     let nodeIds: Set<EntityID>
     let edges: [EdgeRecord]
+}
+
+/// 同义词查询结果：对端 lemma id + 表面形式 + 权重 + 来源类型。
+struct SynonymInfo: Sendable, Equatable {
+    let lemmaId: EntityID
+    let surfaceForm: String?
+    let weight: Double?
+    let sourceType: String?
 }
