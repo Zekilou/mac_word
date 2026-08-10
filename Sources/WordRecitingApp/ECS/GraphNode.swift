@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 
 /// 图节点基类协议。所有 Entity 都必须实现。
 /// id 和 kind 不可变；真实字段放 Component 表，不在 Entity 上扩展。
@@ -55,7 +56,7 @@ struct EdgeNode: GraphNode {
 
 // MARK: - Edge 行（edges 表的拓扑数据，与 EdgeNode 分离）
 
-struct EdgeRecord: Codable, Sendable, Equatable {
+struct EdgeRecord: Codable, FetchableRecord, Sendable, Equatable {
     var id: EntityID
     var srcId: EntityID
     var dstId: EntityID
