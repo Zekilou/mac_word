@@ -3,8 +3,10 @@ import Foundation
 
 /// ECS 核心读写层：持有 AppDatabase，提供 nodes/edges/comp_* 的 CRUD
 /// 以及按组件签名（INNER JOIN）过滤 entity_id 的核心查询。
-/// 所有写方法各自开启写事务；读方法各自开启读事务。
-/// @ai: Task 7 会在 World.run 的事务内复用这些能力（db 参数版本）。
+/// 每个方法都有两个版本：
+///  - db 版本（接收 Database）：在 World.run 的事务内复用，不自己开事务；
+///  - 便捷版本（无 db）：自己开读/写事务，适合非 System 场景（如测试、一次性操作）。
+/// @ai: System 内必须用 db 版本，确保写入在同一事务内。
 final class EntityRegistry: @unchecked Sendable {
     let database: AppDatabase
 
@@ -31,102 +33,126 @@ final class EntityRegistry: @unchecked Sendable {
         self.database = database
     }
 
-    // MARK: - Node
+    // MARK: - Node（db 版本）
 
-    /// 向 nodes 表插入一行。
-    func insertNode(id: EntityID, kind: NodeKind, createdAt: Date) throws {
-        try database.dbWriter.write { db in
-            try db.execute(
-                sql: "INSERT INTO nodes (id, kind, created_at) VALUES (?, ?, ?)",
-                arguments: [id, kind.rawValue, createdAt]
-            )
-        }
+    /// 向 nodes 表插入一行（在传入事务内）。
+    func insertNode(_ db: Database, id: EntityID, kind: NodeKind, createdAt: Date) throws {
+        try db.execute(
+            sql: "INSERT INTO nodes (id, kind, created_at) VALUES (?, ?, ?)",
+            arguments: [id, kind.rawValue, createdAt]
+        )
     }
 
-    /// 从 nodes 表查一行。
-    func fetchNode(id: EntityID) throws -> NodeRow? {
-        try database.dbWriter.read { db in
-            guard let row = try Row.fetchOne(
-                db,
-                sql: "SELECT id, kind, created_at FROM nodes WHERE id = ?",
-                arguments: [id]
-            ) else { return nil }
-            guard let kindRaw: String = row["kind"],
-                  let kind = NodeKind(rawValue: kindRaw)
-            else { return nil }
-            return NodeRow(
-                id: row["id"],
-                kind: kind,
-                createdAt: row["created_at"]
-            )
-        }
+    /// 从 nodes 表查一行（在传入事务内）。
+    func fetchNode(_ db: Database, id: EntityID) throws -> NodeRow? {
+        guard let row = try Row.fetchOne(
+            db,
+            sql: "SELECT id, kind, created_at FROM nodes WHERE id = ?",
+            arguments: [id]
+        ) else { return nil }
+        guard let kindRaw: String = row["kind"],
+              let kind = NodeKind(rawValue: kindRaw)
+        else { return nil }
+        return NodeRow(id: row["id"], kind: kind, createdAt: row["created_at"])
     }
 
-    /// 从 nodes 表删除（CASCADE 自动删组件与 edges）。
-    func deleteNode(id: EntityID) throws {
-        try database.dbWriter.write { db in
-            try db.execute(sql: "DELETE FROM nodes WHERE id = ?", arguments: [id])
-        }
+    /// 从 nodes 表删除（CASCADE 自动删组件与 edges）（在传入事务内）。
+    func deleteNode(_ db: Database, id: EntityID) throws {
+        try db.execute(sql: "DELETE FROM nodes WHERE id = ?", arguments: [id])
     }
 
-    // MARK: - Edge
+    // MARK: - Edge（db 版本）
 
-    /// 向 edges 表插入一行。同时插入 kind=edge 的 node（edges.id FK → nodes.id）。
+    /// 向 edges 表插入一行，同时插入 kind=edge 的 node（edges.id FK → nodes.id）。
     func insertEdge(
-        id: EntityID, srcId: EntityID, dstId: EntityID, rel: EdgeRel, createdAt: Date
+        _ db: Database, id: EntityID, srcId: EntityID, dstId: EntityID,
+        rel: EdgeRel, createdAt: Date
     ) throws {
-        try database.dbWriter.write { db in
-            try db.execute(
-                sql: "INSERT INTO nodes (id, kind, created_at) VALUES (?, ?, ?)",
-                arguments: [id, NodeKind.edge.rawValue, createdAt]
-            )
-            try db.execute(
-                sql: "INSERT INTO edges (id, src_id, dst_id, rel_type, created_at) VALUES (?, ?, ?, ?, ?)",
-                arguments: [id, srcId, dstId, rel.rawValue, createdAt]
-            )
-        }
+        try db.execute(
+            sql: "INSERT INTO nodes (id, kind, created_at) VALUES (?, ?, ?)",
+            arguments: [id, NodeKind.edge.rawValue, createdAt]
+        )
+        try db.execute(
+            sql: "INSERT INTO edges (id, src_id, dst_id, rel_type, created_at) VALUES (?, ?, ?, ?, ?)",
+            arguments: [id, srcId, dstId, rel.rawValue, createdAt]
+        )
     }
 
-    // MARK: - Component
+    // MARK: - Component（db 版本）
 
     /// upsert 一个组件到对应表（按 entity_id PK，save = update or insert）。
-    func upsertComponent<T: PersistableRecord>(_ component: T) throws {
-        try database.dbWriter.write { db in
-            try component.save(db)
-        }
+    func upsertComponent<T: PersistableRecord>(_ db: Database, _ component: T) throws {
+        try component.save(db)
     }
 
     /// 从指定 comp_* 表按 entity_id 查一行。
     func fetchComponents<T: FetchableRecord>(
-        for entityId: EntityID, table: String
+        _ db: Database, for entityId: EntityID, table: String
     ) throws -> T? {
-        try database.dbWriter.read { db in
-            try T.fetchOne(
-                db,
-                sql: "SELECT * FROM \(table) WHERE entity_id = ?",
-                arguments: [entityId]
-            )
+        try T.fetchOne(
+            db,
+            sql: "SELECT * FROM \(table) WHERE entity_id = ?",
+            arguments: [entityId]
+        )
+    }
+
+    // MARK: - Component signature filter（db 版本，核心）
+
+    /// 按组件签名 JOIN 过滤：返回同时在所有指定 comp_* 表中有行的 entity_id 集合。
+    func filterEntityIDs(
+        _ db: Database, requiringAll componentIDs: [ComponentID]
+    ) throws -> [EntityID] {
+        if componentIDs.isEmpty {
+            return try String.fetchAll(db, sql: "SELECT id FROM nodes")
+        }
+        var sql = "SELECT n.id FROM nodes n"
+        for (i, cid) in componentIDs.enumerated() {
+            guard let table = Self.tableNameMap[cid] else { continue }
+            let alias = "t\(i)"
+            sql += " INNER JOIN \(table) \(alias) ON \(alias).entity_id = n.id"
+        }
+        return try String.fetchAll(db, sql: sql)
+    }
+
+    // MARK: - 便捷版本（自开事务，供非 System 场景使用）
+
+    func insertNode(id: EntityID, kind: NodeKind, createdAt: Date) throws {
+        try database.dbWriter.write { db in
+            try insertNode(db, id: id, kind: kind, createdAt: createdAt)
         }
     }
 
-    // MARK: - Component signature filter (核心)
+    func fetchNode(id: EntityID) throws -> NodeRow? {
+        try database.dbWriter.read { db in try fetchNode(db, id: id) }
+    }
 
-    /// 按组件签名 JOIN 过滤：返回同时在所有指定 comp_* 表中有行的 entity_id 集合。
-    /// 例如 requiringAll=[.text, .schedule_state] 返回同时挂了这两张表的 entity_id。
-    /// 实现方式：用 INNER JOIN 拼接 SQL。
+    func deleteNode(id: EntityID) throws {
+        try database.dbWriter.write { db in try deleteNode(db, id: id) }
+    }
+
+    func insertEdge(
+        id: EntityID, srcId: EntityID, dstId: EntityID, rel: EdgeRel, createdAt: Date
+    ) throws {
+        try database.dbWriter.write { db in
+            try insertEdge(db, id: id, srcId: srcId, dstId: dstId, rel: rel, createdAt: createdAt)
+        }
+    }
+
+    func upsertComponent<T: PersistableRecord>(_ component: T) throws {
+        try database.dbWriter.write { db in try upsertComponent(db, component) }
+    }
+
+    func fetchComponents<T: FetchableRecord>(
+        for entityId: EntityID, table: String
+    ) throws -> T? {
+        try database.dbWriter.read { db in
+            try fetchComponents(db, for: entityId, table: table)
+        }
+    }
+
     func filterEntityIDs(requiringAll componentIDs: [ComponentID]) throws -> [EntityID] {
         try database.dbWriter.read { db in
-            // 无约束：返回全部 node id
-            if componentIDs.isEmpty {
-                return try String.fetchAll(db, sql: "SELECT id FROM nodes")
-            }
-            var sql = "SELECT n.id FROM nodes n"
-            for (i, cid) in componentIDs.enumerated() {
-                guard let table = Self.tableNameMap[cid] else { continue }
-                let alias = "t\(i)"
-                sql += " INNER JOIN \(table) \(alias) ON \(alias).entity_id = n.id"
-            }
-            return try String.fetchAll(db, sql: sql)
+            try filterEntityIDs(db, requiringAll: componentIDs)
         }
     }
 }
