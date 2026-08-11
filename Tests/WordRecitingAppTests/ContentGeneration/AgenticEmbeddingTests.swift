@@ -190,4 +190,153 @@ final class AgenticEmbeddingTests: XCTestCase {
         }
         XCTAssertEqual(box.values.count, 1, "轻量档不调语义验证")
     }
+
+    // MARK: - 管线（generateViaRewrite）
+
+    /// 完整管线：策略 → 纯净草稿 → 锚点 → 逐词嵌入 → 回填润色 → span。
+    func testGenerateViaRewritePipelineEndToEnd() async throws {
+        let appDB = try AppDatabase.inMemory()
+        let world = World(database: appDB)
+        let graph = world.graph
+        let now = Date()
+        let ids = ["lemma-1", "lemma-2"]
+        let batch = ImportBatch(
+            deckId: "deck-1",
+            nodes: [
+                .init(id: "deck-1", kind: .deck, createdAt: now),
+                .init(id: "lemma-1", kind: .lemma, createdAt: now),
+                .init(id: "lemma-2", kind: .lemma, createdAt: now),
+            ],
+            textComponents: [
+                TextComponent(entityId: ids[0], textA: "abandon", textB: nil, language: "en"),
+                TextComponent(entityId: ids[1], textA: "battle", textB: nil, language: "en"),
+            ],
+            deckMetas: [DeckMetaComponent(
+                entityId: "deck-1", name: "T", sourceKind: "csv",
+                sourcePath: nil, importedAt: now)],
+            edges: [], failures: [])
+        try world.run(ImportSystem(), context: batch)
+
+        let box = PromptListBox()
+        // 调用序列：
+        // 1 策略 2 纯净草稿(stream→complete) 3 锚点选句
+        // 4 abandon 改写 5 abandon 验证 6 battle 改写 7 battle 验证
+        // 8 句0 衔接 9 句1 衔接
+        let client = SeqClient(responses: [
+            "STRATEGY: generate-rewrite\nWINDOW: sentence\nFALLBACK: skip",
+            "A normal article about daily life. People wake up, work, and rest each day.",
+            "{\"abandon\": {\"index\": 0, \"associations\": \"give up, leave\"}, \"battle\": {\"index\": 1, \"associations\": \"fight, effort\"}}",
+            "We should never abandon our dreams.",
+            "Yes, they mean the same.",
+            "The battle continues every day.",
+            "Yes, they mean the same.",
+            "We should never abandon our dreams.\nThe battle continues every day.",
+            "We should never abandon our dreams.\nThe battle continues every day.",
+        ], onPrompt: { box.values.append($0) })
+        let gen = LocalLLMGenerator(client: client)
+        let article = try await gen.generate(
+            mode: .generate, sourceText: "科技", targetLemmas: ids,
+            constraints: GenerationConstraints(), graph: graph)
+
+        // 决策走 generate-rewrite；策略回传（首个调用为策略 pass，决策由末尾 strategy.mode 断言验证）
+        XCTAssertTrue(box.values[0].contains("STRATEGY"), "首个调用应为策略 pass：\(box.values[0])")
+        XCTAssertTrue(box.values[1].contains("Write a natural, engaging English article"),
+                      "第一步应纯净草稿：\(box.values[1])")
+        XCTAssertFalse(box.values[1].contains("abandon"), "草稿不应含目标词约束")
+        // 专注改写 prompt 应单句 + 单词
+        XCTAssertTrue(box.values[3].contains("Original sentence"), "第 4 次应为专注改写")
+        // 回填润色调用
+        XCTAssertTrue(box.values[7].contains("consecutive sentences"))
+        // 最终正文含两词 + spans 命中 + 无跳过
+        XCTAssertTrue(article.body.lowercased().contains("abandon"), "正文: \(article.body)")
+        XCTAssertTrue(article.body.lowercased().contains("battle"), "正文: \(article.body)")
+        let spanLemmas = Set(article.spans.compactMap { $0.lemmaId })
+        XCTAssertTrue(spanLemmas.contains(ids[0]))
+        XCTAssertTrue(spanLemmas.contains(ids[1]))
+        XCTAssertTrue(article.skippedWords.isEmpty)
+        XCTAssertEqual(article.strategy?.mode, .generateRewrite)
+    }
+
+    /// 全部词都融不进：换锚点仍失败 → 跳过 + 结构化报告。
+    func testGenerateViaRewriteSkipsAndReports() async throws {
+        let appDB = try AppDatabase.inMemory()
+        let world = World(database: appDB)
+        let graph = world.graph
+        let now = Date()
+        let ids = ["lemma-1", "lemma-2"]
+        let batch = ImportBatch(
+            deckId: "deck-1",
+            nodes: [
+                .init(id: "deck-1", kind: .deck, createdAt: now),
+                .init(id: "lemma-1", kind: .lemma, createdAt: now),
+                .init(id: "lemma-2", kind: .lemma, createdAt: now),
+            ],
+            textComponents: [
+                TextComponent(entityId: ids[0], textA: "abandon", textB: nil, language: "en"),
+                TextComponent(entityId: ids[1], textA: "battle", textB: nil, language: "en"),
+            ],
+            deckMetas: [DeckMetaComponent(
+                entityId: "deck-1", name: "T", sourceKind: "csv",
+                sourcePath: nil, importedAt: now)],
+            edges: [], failures: [])
+        try world.run(ImportSystem(), context: batch)
+
+        let box = PromptListBox()
+        // abandon 三次改写失败（无词）；used={0,1} 无空闲锚点 → 直接跳过
+        // battle 成功；回填后衔接润色（句1）；最后跳过词结构化报告
+        // 调用序列：
+        // 1 策略 2 草稿 3 锚点
+        // 4-6 abandon 改写(缺词×3)
+        // 7 battle 改写 8 battle 验证
+        // 9 句1 衔接润色
+        // 10 跳过报告
+        let client = SeqClient(responses: [
+            "STRATEGY: generate-rewrite\nWINDOW: whole\nFALLBACK: retry",
+            "A normal article about daily life. People wake up, work, and rest each day.",
+            "{\"abandon\": {\"index\": 0, \"associations\": \"x\"}, \"battle\": {\"index\": 1, \"associations\": \"y\"}}",
+            "Nothing to see here.",   // abandon 尝试1（缺词）
+            "Still nothing here.",    // 尝试2
+            "Again nothing.",         // 尝试3 → 跳过（无空闲锚点）
+            "The battle continues every day.",
+            "Yes.",
+            "A normal article about daily life.\nThe battle continues every day.",  // 句1 衔接
+            "[{\"word\": \"abandon\", \"reason\": \"no natural fit\"}]",
+        ], onPrompt: { box.values.append($0) })
+        let gen = LocalLLMGenerator(client: client)
+        let article = try await gen.generate(
+            mode: .generate, sourceText: "科技", targetLemmas: ids,
+            constraints: GenerationConstraints(), graph: graph)
+
+        XCTAssertTrue(article.body.lowercased().contains("battle"))
+        XCTAssertEqual(article.skippedWords.map(\.word), ["abandon"])
+        XCTAssertEqual(article.skippedWords[0].reason, "no natural fit", "结构化报告应覆盖本地记录")
+        let spanLemmas = Set(article.spans.compactMap { $0.lemmaId })
+        XCTAssertTrue(spanLemmas.contains(ids[1]))
+        XCTAssertFalse(spanLemmas.contains(ids[0]), "跳过的词不应命中 span")
+        XCTAssertTrue(box.values[8].contains("consecutive sentences"), "回填后应衔接润色")
+        XCTAssertTrue(box.values[9].contains("JSON"), "应调用跳过报告 prompt")
+    }
+
+    /// 长草稿（估算 > 预算）→ 不调用带全文的锚点 prompt，走联想(短) + 本地词面匹配。
+    func testResolveAnchorsFallsBackToLocalMatchForLongDraft() async throws {
+        let longSentences = (0..<60).map {
+            "This is sentence number \($0) with some extra words to make it longer than before."
+        }
+        let longDraft = longSentences.joined(separator: " ")
+        XCTAssertGreaterThan(LocalLLMGenerator.estimateTokens(longDraft),
+                             LocalLLMGenerator.anchorTokenBudget,
+                             "用例草稿必须超预算才能测到降级路径")
+        let box = PromptListBox()
+        let client = SeqClient(responses: [
+            "{\"abandon\": \"give up, leave, desert\", \"battle\": \"fight, effort, struggle\"}",
+        ], onPrompt: { box.values.append($0) })
+        let gen = LocalLLMGenerator(client: client)
+        let anchors = await gen.resolveAnchors(words: ["abandon", "battle"], sentences: longSentences)
+        XCTAssertEqual(anchors.count, 2)
+        XCTAssertTrue(anchors.allSatisfy {
+            $0.sentenceIndex >= 0 && $0.sentenceIndex < longSentences.count
+        })
+        XCTAssertFalse(box.values[0].contains("0:"), "长文不应调用带全文的锚点 prompt")
+        XCTAssertTrue(box.values[0].contains("JSON"))
+    }
 }
