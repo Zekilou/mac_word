@@ -27,18 +27,26 @@ extension LocalLLMGenerator {
     func embedWord(
         word: String, anchorIndex: Int, associations: String,
         sentences: [String], usedIndexes: Set<Int>, config: EmbedConfig
-    ) async -> EmbedResult {
+    ) async throws -> EmbedResult {
+        onProgress?(.thought(GenThought(
+            id: "embed-\(word)", kind: .embedding,
+            message: "融入 \(word)（锚点句#\(anchorIndex)）", detail: nil, status: .running)))
         let history = AttemptHistory()
         var anchor = anchorIndex
         var anchorSwitches = 0
         while true {
+            try Task.checkCancellation()
             guard sentences.indices.contains(anchor) else {
+                onProgress?(.thought(GenThought(
+                    id: "embed-\(word)", kind: .embedding,
+                    message: "融入 \(word)：锚点句缺失，跳过", detail: nil, status: .failed)))
                 return .skipped(SkippedWord(word: word, reason: "草稿为空或锚点句缺失"))
             }
             let sentence = sentences[anchor]
             var attempts = 0
             var lastFeedback: [String]?
             while attempts < config.maxAttempts {
+                try Task.checkCancellation()
                 let prompt = AgenticPrompts.focusedRewritePrompt(
                     sentence: sentence, word: word,
                     associations: associations, feedback: lastFeedback)
@@ -55,6 +63,10 @@ extension LocalLLMGenerator {
                     original: sentence, rewritten: rewritten, word: word,
                     history: history, config: config) {
                 case .pass:
+                    onProgress?(.thought(GenThought(
+                        id: "embed-\(word)", kind: .embedding,
+                        message: "融入 \(word)：改写成功（锚点句#\(anchor)）",
+                        detail: nil, status: .done)))
                     return .success(rewritten)
                 case .fail(let reasons):
                     lastFeedback = reasons
@@ -66,8 +78,11 @@ extension LocalLLMGenerator {
                 anchorSwitches += 1
                 continue
             }
-            return .skipped(SkippedWord(
-                word: word, reason: "\(config.maxAttempts) 次尝试后仍无法自然融入"))
+            let reason = "\(config.maxAttempts) 次尝试后仍无法自然融入"
+            onProgress?(.thought(GenThought(
+                id: "embed-\(word)", kind: .embedding,
+                message: "融入 \(word)：失败，跳过", detail: reason, status: .failed)))
+            return .skipped(SkippedWord(word: word, reason: reason))
         }
     }
 

@@ -14,13 +14,22 @@ extension LocalLLMGenerator {
 
         // 1. 纯净草稿（不约束目标词）
         onProgress?(.stage(.generating))
-        let raw = try await client.stream(
+        onProgress?(.thought(GenThought(
+            id: "draft", kind: .generating,
+            message: "正在生成正文…", detail: nil, status: .running)))
+        try Task.checkCancellation()
+        let draftBox = StreamBufferBox()
+        _ = try await client.stream(
             prompt: GenStrategyPrompt.plainPrompt(theme: theme, maxWords: maxWords),
             maxTokens: maxTokens, temperature: temperature
         ) { [onProgress] token in
-            onProgress?(.token(token))
+            let clean = draftBox.buffer.append(token)
+            if !clean.isEmpty { onProgress?(.token(clean)) }
         }
-        var body = Self.cleanArticle(raw)
+        var body = Self.cleanArticle(draftBox.buffer.finalize())
+        onProgress?(.thought(GenThought(
+            id: "draft", kind: .generating,
+            message: "草稿完成（\(draftBox.buffer.rawAll.count) 字符）", detail: nil, status: .done)))
 
         var skipped: [SkippedWord] = []
         if !words.isEmpty, !body.isEmpty {
@@ -31,14 +40,20 @@ extension LocalLLMGenerator {
             } else {
                 // 3. 联想 + 锚点（一次调用）
                 onProgress?(.stage(.embedding))
+                onProgress?(.thought(GenThought(
+                    id: "anchor", kind: .planning,
+                    message: "正在联想并匹配锚点句…", detail: nil, status: .running)))
                 let anchors = await resolveAnchors(words: words, sentences: sentences)
+                onProgress?(.thought(GenThought(
+                    id: "anchor", kind: .planning,
+                    message: "锚点匹配完成（\(anchors.count) 词）", detail: nil, status: .done)))
 
                 // 4. 逐词循环
                 var replacements: [Int: String] = [:]
                 var used = Set(anchors.map(\.sentenceIndex))
                 for (i, a) in anchors.enumerated() {
                     onProgress?(.word(done: i, total: anchors.count, word: a.word))
-                    switch await embedWord(
+                    switch try await embedWord(
                         word: a.word, anchorIndex: a.sentenceIndex, associations: a.associations,
                         sentences: sentences, usedIndexes: used, config: config) {
                     case .success(let newSentence):
@@ -56,7 +71,14 @@ extension LocalLLMGenerator {
                 }
 
                 // 6. 局部衔接润色（替换点前后各 1 句）
+                onProgress?(.thought(GenThought(
+                    id: "smooth", kind: .polishing,
+                    message: "正在衔接润色…", detail: nil, status: .running)))
+                try Task.checkCancellation()
                 finalSentences = await smoothAt(finalSentences, replaced: Set(replacements.keys))
+                onProgress?(.thought(GenThought(
+                    id: "smooth", kind: .polishing,
+                    message: "衔接润色完成（\(replacements.count) 处）", detail: nil, status: .done)))
                 body = Self.cleanArticle(finalSentences.joined(separator: " "))
             }
         }
@@ -169,6 +191,12 @@ extension LocalLLMGenerator {
 
         // 跳过词结构化报告（模型确认 + 原因；失败回退本地记录）
         if !finalSkipped.isEmpty {
+            onProgress?(.thought(GenThought(
+                id: "skipped", kind: .embedding,
+                message: "未融入：\(finalSkipped.map(\.word).joined(separator: "、"))",
+                detail: finalSkipped.map { "\($0.word)（\($0.reason)）" }.joined(separator: "\n"),
+                status: .done)))
+            try Task.checkCancellation()
             let raw = try? await client.complete(
                 prompt: AgenticPrompts.skippedReportPrompt(skipped: finalSkipped),
                 maxTokens: 200, temperature: 0.2)

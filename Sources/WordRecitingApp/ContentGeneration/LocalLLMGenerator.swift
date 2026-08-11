@@ -44,6 +44,11 @@ struct GenThought: Sendable {
     let status: Status
 }
 
+/// 流式标记缓冲的引用包装：@Sendable onToken 回调内需可变捕获，值类型必须装进引用容器。
+final class StreamBufferBox: @unchecked Sendable {
+    var buffer = MarkedStreamBuffer()
+}
+
 /// 本地 LLM 造文/改写生成器（tier = .local）。
 /// 用任意 LLMClient 后端生成：主题 + 目标词 → prompt → 文章。
 /// 生成后用与 RuleBasedGenerator 相同的词扫描逻辑标记目标词 spans（isTarget=true）。
@@ -88,9 +93,11 @@ struct LocalLLMGenerator: ContentGenerator {
         var strategy: GenStrategy?
         let prompt: String
         if mode == .generate {
-            // 策略 pass：让 LLM 自己决定生成方式（plan-embed / generate-rewrite）、
-            // 改写窗口、嵌入不足处理；解析失败默认 plan-embed。
             onProgress?(.stage(.strategy))
+            onProgress?(.thought(GenThought(
+                id: "strategy", kind: .strategy,
+                message: "正在制定生成策略…", detail: nil, status: .running)))
+            try Task.checkCancellation()
             var decided = GenStrategy()
             if !words.isEmpty {
                 if let raw = try? await client.complete(
@@ -100,14 +107,21 @@ struct LocalLLMGenerator: ContentGenerator {
                 }
             }
             strategy = decided
+            let modeLabel = decided.mode == .generateRewrite ? "先写后改写（generate-rewrite）" : "按计划嵌入（plan-embed）"
+            onProgress?(.thought(GenThought(
+                id: "strategy", kind: .strategy,
+                message: "策略：\(modeLabel)", detail: nil, status: .done)))
             if decided.mode == .generateRewrite {
                 return try await generateViaRewrite(
                     theme: theme, words: words, maxWords: constraints.maxWords,
                     strategy: decided, surfaces: surfaces, targetLemmas: targetLemmas,
                     constraints: constraints, graph: graph)
             }
-            // plan-embed：现有规划 pass + 按计划嵌入生成
             onProgress?(.stage(.planning))
+            onProgress?(.thought(GenThought(
+                id: "planning", kind: .planning,
+                message: "正在联想词义并打草稿…", detail: nil, status: .running)))
+            try Task.checkCancellation()
             if !words.isEmpty {
                 if let planned = try? await client.complete(
                     prompt: Self.planPrompt(theme: theme, words: words, maxWords: constraints.maxWords),
@@ -116,6 +130,10 @@ struct LocalLLMGenerator: ContentGenerator {
                     plan = cleaned.isEmpty ? nil : cleaned
                 }
             }
+            let wordCount = words.count
+            onProgress?(.thought(GenThought(
+                id: "planning", kind: .planning,
+                message: "规划完成（\(wordCount) 词）", detail: plan, status: .done)))
             prompt = Self.generatePrompt(
                 theme: theme, words: words, maxWords: constraints.maxWords, plan: plan)
         } else {
@@ -124,26 +142,42 @@ struct LocalLLMGenerator: ContentGenerator {
         }
 
         onProgress?(.stage(.generating))
-        let raw = try await client.stream(
+        onProgress?(.thought(GenThought(
+            id: "draft", kind: .generating,
+            message: "正在生成正文…", detail: nil, status: .running)))
+        try Task.checkCancellation()
+        let streamBox = StreamBufferBox()
+        _ = try await client.stream(
             prompt: prompt, maxTokens: maxTokens, temperature: temperature
         ) { [onProgress] token in
-            onProgress?(.token(token))
+            let clean = streamBox.buffer.append(token)
+            if !clean.isEmpty { onProgress?(.token(clean)) }
         }
-        var body = Self.cleanArticle(raw)
-        // 自查：让模型自己检查一遍，删掉释义式/强行嵌入的句子（不用规则枚举表述方式）。
-        // 自查失败或结果为空则保留原正文。
+        var body = Self.cleanArticle(streamBox.buffer.finalize())
+        onProgress?(.thought(GenThought(
+            id: "draft", kind: .generating,
+            message: "生成正文完成（\(streamBox.buffer.rawAll.count) 字符）", detail: nil, status: .done)))
         if !body.isEmpty {
             onProgress?(.stage(.polishing))
+            onProgress?(.thought(GenThought(
+                id: "polish", kind: .polishing,
+                message: "正在改写润色…", detail: nil, status: .running)))
+            try Task.checkCancellation()
+            let polishBox = StreamBufferBox()
             let polished = try? await client.stream(
                 prompt: Self.polishPrompt(article: body),
                 maxTokens: maxTokens, temperature: 0.3,
                 onToken: { [onProgress] token in
-                    onProgress?(.token(token))
+                    let clean = polishBox.buffer.append(token)
+                    if !clean.isEmpty { onProgress?(.token(clean)) }
                 })
             if let polished, !polished.isEmpty {
-                let cleaned = Self.cleanArticle(polished)
+                let cleaned = Self.cleanArticle(polishBox.buffer.finalize())
                 if !cleaned.isEmpty { body = cleaned }
             }
+            onProgress?(.thought(GenThought(
+                id: "polish", kind: .polishing,
+                message: "润色完成", detail: nil, status: .done)))
         }
         var spans = Self.findTargetSpans(body: body, surfaces: surfaces)
 

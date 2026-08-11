@@ -52,7 +52,7 @@ final class AgenticEmbeddingTests: XCTestCase {
             "Yes, they mean the same.",
         ], onPrompt: { box.values.append($0) })
         let gen = LocalLLMGenerator(client: client)
-        let result = await gen.embedWord(
+        let result = try await gen.embedWord(
             word: "battle", anchorIndex: 0, associations: "fight",
             sentences: ["We must keep going."], usedIndexes: [],
             config: .init())
@@ -71,7 +71,7 @@ final class AgenticEmbeddingTests: XCTestCase {
             "Yes.",
         ], onPrompt: { box.values.append($0) })
         let gen = LocalLLMGenerator(client: client)
-        let result = await gen.embedWord(
+        let result = try await gen.embedWord(
             word: "abandon", anchorIndex: 0, associations: "give up",
             sentences: ["We must keep going."], usedIndexes: [],
             config: .init(maxAttempts: 3))
@@ -87,7 +87,7 @@ final class AgenticEmbeddingTests: XCTestCase {
             "One.", "Two.", "Three.",  // 三次改写均不含词
         ])
         let gen = LocalLLMGenerator(client: client)
-        let result = await gen.embedWord(
+        let result = try await gen.embedWord(
             word: "abandon", anchorIndex: 0, associations: "",
             sentences: ["Only sentence."], usedIndexes: [],
             config: .init(maxAttempts: 3, maxAnchorSwitches: 0))
@@ -106,7 +106,7 @@ final class AgenticEmbeddingTests: XCTestCase {
             "Yes.",
         ], onPrompt: { box.values.append($0) })
         let gen = LocalLLMGenerator(client: client)
-        let result = await gen.embedWord(
+        let result = try await gen.embedWord(
             word: "battle", anchorIndex: 0, associations: "",
             sentences: ["First sentence.", "Second sentence."],
             usedIndexes: [],
@@ -127,7 +127,7 @@ final class AgenticEmbeddingTests: XCTestCase {
             "The battle rages on every day now.",  // 尝试3：不同且含词 → 直接通过
         ], onPrompt: { box.values.append($0) })
         let gen = LocalLLMGenerator(client: client)
-        let result = await gen.embedWord(
+        let result = try await gen.embedWord(
             word: "battle", anchorIndex: 0, associations: "",
             sentences: ["We keep going."], usedIndexes: [],
             config: .init(maxAttempts: 3, maxAnchorSwitches: 0))
@@ -148,7 +148,7 @@ final class AgenticEmbeddingTests: XCTestCase {
             "Yes.",
         ], onPrompt: { box.values.append($0) })
         let gen = LocalLLMGenerator(client: client)
-        let result = await gen.embedWord(
+        let result = try await gen.embedWord(
             word: "battle", anchorIndex: 0, associations: "",
             sentences: ["We go."], usedIndexes: [],
             config: .init(verification: .strict, maxAttempts: 3, maxAnchorSwitches: 0))
@@ -166,7 +166,7 @@ final class AgenticEmbeddingTests: XCTestCase {
             "Yes, they mean the same.",
         ])
         let gen = LocalLLMGenerator(client: client)
-        let result = await gen.embedWord(
+        let result = try await gen.embedWord(
             word: "battle", anchorIndex: 0, associations: "",
             sentences: ["We keep going."], usedIndexes: [],
             config: .init(maxAttempts: 3, maxAnchorSwitches: 0))
@@ -181,7 +181,7 @@ final class AgenticEmbeddingTests: XCTestCase {
             "The battle is here.",
         ], onPrompt: { box.values.append($0) })
         let gen = LocalLLMGenerator(client: client)
-        let result = await gen.embedWord(
+        let result = try await gen.embedWord(
             word: "battle", anchorIndex: 0, associations: "",
             sentences: ["We go."], usedIndexes: [],
             config: .init(verification: .light, maxAttempts: 3, maxAnchorSwitches: 0))
@@ -349,5 +349,102 @@ final class AgenticEmbeddingTests: XCTestCase {
         XCTAssertEqual(t.kind, .strategy)
         XCTAssertEqual(t.status, .done)
         XCTAssertEqual(GenThought.Kind.allCases.count, 7)
+    }
+
+    // MARK: - 思考事件（thought 路由）
+
+    private final class ThoughtBox: @unchecked Sendable {
+        var items: [GenThought] = []
+    }
+
+    /// plan-embed 路径应发出：strategy → planning → draft → polish 的思考事件。
+    func testGenerateEmitsThoughtEventsPlanEmbed() async throws {
+        let appDB = try AppDatabase.inMemory()
+        let world = World(database: appDB)
+        let graph = world.graph
+        let now = Date()
+        let batch = ImportBatch(
+            deckId: "deck-1",
+            nodes: [
+                .init(id: "deck-1", kind: .deck, createdAt: now),
+                .init(id: "lemma-1", kind: .lemma, createdAt: now),
+            ],
+            textComponents: [TextComponent(entityId: "lemma-1", textA: "abandon", textB: nil, language: "en")],
+            deckMetas: [DeckMetaComponent(entityId: "deck-1", name: "T", sourceKind: "csv", sourcePath: nil, importedAt: now)],
+            edges: [], failures: [])
+        try world.run(ImportSystem(), context: batch)
+
+        let box = ThoughtBox()
+        let client = SeqClient(responses: [
+            "STRATEGY: plan-embed\nWINDOW: whole\nFALLBACK: skip",
+            "- abandon: intro\n- Intro",
+            "===ARTICLE_START===We should not abandon our dreams.===ARTICLE_END===",
+            "===ARTICLE_START===Technology changes our lives.===ARTICLE_END===",
+        ])
+        let gen = LocalLLMGenerator(client: client, onProgress: { progress in
+            if case .thought(let t) = progress { box.items.append(t) }
+        })
+        _ = try await gen.generate(
+            mode: .generate, sourceText: "科技", targetLemmas: ["lemma-1"],
+            constraints: GenerationConstraints(), graph: graph)
+
+        let ids = box.items.map(\.id)
+        XCTAssertTrue(ids.contains("strategy"))
+        XCTAssertTrue(ids.contains("planning"))
+        XCTAssertTrue(box.items.contains { $0.id == "strategy" && $0.status == .done },
+                      "strategy 应有 done 事件，实际 \(ids)")
+        XCTAssertTrue(box.items.contains { $0.id == "planning" && $0.status == .done },
+                      "planning 应有 done 事件，实际 \(ids)")
+        XCTAssertTrue(box.items.contains { $0.id == "draft" && $0.status == .done },
+                      "正文流式应有 draft 完成事件，实际 \(ids)")
+    }
+
+    /// generate-rewrite 路径应发出：strategy → draft → anchor → embed-<word> → smooth。
+    func testGenerateViaRewriteEmitsThoughtEvents() async throws {
+        let appDB = try AppDatabase.inMemory()
+        let world = World(database: appDB)
+        let graph = world.graph
+        let now = Date()
+        let batch = ImportBatch(
+            deckId: "deck-1",
+            nodes: [
+                .init(id: "deck-1", kind: .deck, createdAt: now),
+                .init(id: "lemma-1", kind: .lemma, createdAt: now),
+                .init(id: "lemma-2", kind: .lemma, createdAt: now),
+            ],
+            textComponents: [
+                TextComponent(entityId: "lemma-1", textA: "abandon", textB: nil, language: "en"),
+                TextComponent(entityId: "lemma-2", textA: "battle", textB: nil, language: "en"),
+            ],
+            deckMetas: [DeckMetaComponent(entityId: "deck-1", name: "T", sourceKind: "csv", sourcePath: nil, importedAt: now)],
+            edges: [], failures: [])
+        try world.run(ImportSystem(), context: batch)
+
+        let box = ThoughtBox()
+        let client = SeqClient(responses: [
+            "STRATEGY: generate-rewrite\nWINDOW: sentence\nFALLBACK: skip",
+            "===ARTICLE_START===A normal article about daily life. People wake up, work, and rest each day.===ARTICLE_END===",
+            "{\"abandon\": {\"index\": 0, \"associations\": \"give up\"}, \"battle\": {\"index\": 1, \"associations\": \"fight\"}}",
+            "We should never abandon our dreams.",
+            "Yes.",
+            "The battle continues every day.",
+            "Yes.",
+            "We should never abandon our dreams.\nThe battle continues every day.",
+            "We should never abandon our dreams.\nThe battle continues every day.",
+        ])
+        let gen = LocalLLMGenerator(client: client, onProgress: { progress in
+            if case .thought(let t) = progress { box.items.append(t) }
+        })
+        let article = try await gen.generate(
+            mode: .generate, sourceText: "科技", targetLemmas: ["lemma-1", "lemma-2"],
+            constraints: GenerationConstraints(), graph: graph)
+
+        let ids = box.items.map(\.id)
+        XCTAssertTrue(ids.contains("anchor"), "应有锚点事件，实际 \(ids)")
+        XCTAssertTrue(ids.contains("embed-abandon"), "应有逐词事件，实际 \(ids)")
+        XCTAssertTrue(ids.contains("embed-battle"))
+        XCTAssertTrue(box.items.contains { $0.id == "embed-abandon" && $0.status == .done })
+        XCTAssertTrue(article.body.lowercased().contains("abandon"))
+        XCTAssertTrue(article.body.lowercased().contains("battle"))
     }
 }
