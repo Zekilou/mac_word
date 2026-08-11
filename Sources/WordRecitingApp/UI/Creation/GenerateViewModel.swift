@@ -258,6 +258,7 @@ final class GenerateViewModel {
             }
             var c = constraints
             c.topic = topic
+            c.embeddingVerification = settings.embeddingVerification
             let consts = c
             let generator = try makeGenerator()
             let world = self.world
