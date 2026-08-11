@@ -232,6 +232,11 @@ struct LocalLLMGenerator: ContentGenerator {
         - Length: about \(maxWords) words.
         - Style: plain, fluent English suitable for an intermediate learner.
         - Output ONLY the article body.
+        - Wrap the output exactly with:
+          ===ARTICLE_START===
+          (content)
+          ===ARTICLE_END===
+        - Output nothing outside these markers.
         """
     }
 
@@ -245,6 +250,11 @@ struct LocalLLMGenerator: ContentGenerator {
         - If a word would read forced, omit it rather than force it in.
         - Do NOT define or explain the words, and do NOT add a word list or glossary.
         - Output ONLY the rewritten article body.
+        - Wrap the output exactly with:
+          ===ARTICLE_START===
+          (content)
+          ===ARTICLE_END===
+        - Output nothing outside these markers.
         - Approximate length: \(maxWords) words.
 
         Original text:
@@ -288,6 +298,11 @@ struct LocalLLMGenerator: ContentGenerator {
         The final text must read like a normal article; no sentence may explain a word.
         Keep everything else EXACTLY as it is. Do not add new content.
         Output ONLY the cleaned article text.
+        - Wrap the output exactly with:
+          ===ARTICLE_START===
+          (content)
+          ===ARTICLE_END===
+        - Output nothing outside these markers.
 
         Article:
         \(article)

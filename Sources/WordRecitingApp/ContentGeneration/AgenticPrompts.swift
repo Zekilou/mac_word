@@ -195,4 +195,26 @@ enum AgenticPrompts {
             if let v = obj[w], !v.isEmpty { acc[w] = v }
         }
     }
+
+    // MARK: - 输出约定标记
+
+    static let articleStart = "===ARTICLE_START==="
+    static let articleEnd = "===ARTICLE_END==="
+
+    /// 提取两个标记之间的正文；标记缺失/半截回退 cleanArticle 全量。
+    static func extractMarkedBody(_ raw: String) -> String {
+        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let start = s.range(of: articleStart) else {
+            return LocalLLMGenerator.cleanArticle(s)
+        }
+        let inner: String
+        if let endRange = s.range(of: articleEnd) {
+            inner = String(s[start.upperBound..<endRange.lowerBound])
+        } else {
+            // 有开标记但结束标记缺失（半截正文）：取开标记之后的内容
+            inner = String(s[start.upperBound...])
+        }
+        let cleaned = LocalLLMGenerator.cleanArticle(inner)
+        return cleaned.isEmpty ? LocalLLMGenerator.cleanArticle(s) : cleaned
+    }
 }

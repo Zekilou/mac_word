@@ -121,4 +121,26 @@ final class AgenticPromptsTests: XCTestCase {
         XCTAssertEqual(parsed["battle"], "fight")
         XCTAssertEqual(AgenticPrompts.parseAssociations("garbage", words: ["a"]), [:])
     }
+
+    // MARK: - 输出约定标记
+
+    func testExtractMarkedBody() {
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody(
+            "===ARTICLE_START===Hello world.===ARTICLE_END==="), "Hello world.")
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody(
+            "thinking\n===ARTICLE_START===Hello.===ARTICLE_END===trail"),
+            "Hello.", "标记外内容应被丢弃")
+    }
+
+    func testExtractMarkedBodyFallsBackWhenNoMarkers() {
+        let raw = "Plain article without markers."
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody(raw), raw)
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody("===ARTICLE_START===半截"), "半截")
+    }
+
+    func testPlainPromptContainsMarkerInstruction() {
+        let p = GenStrategyPrompt.plainPrompt(theme: "科技", maxWords: 100)
+        XCTAssertTrue(p.contains("===ARTICLE_START==="), "纯净草稿应要求标记")
+        XCTAssertTrue(p.contains("===ARTICLE_END==="))
+    }
 }

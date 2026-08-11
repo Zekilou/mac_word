@@ -127,6 +127,11 @@ enum GenStrategyPrompt {
         - Length: about \(maxWords) words.
         - Style: plain, fluent English suitable for an intermediate learner.
         - Output ONLY the article body.
+        - Wrap the article exactly with:
+          ===ARTICLE_START===
+          (article body)
+          ===ARTICLE_END===
+        - Output nothing outside these markers.
         """
     }
 }
