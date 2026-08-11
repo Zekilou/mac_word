@@ -1,12 +1,24 @@
 import Foundation
 
+/// 未能自然融入的目标词（结构化报告：词 + 原因）。
+struct SkippedWord: Sendable, Equatable {
+    let word: String
+    let reason: String
+}
+
 /// 生成文章的结构化结果：改写或造文后的完整正文 + 目标词 span 信息。
-/// @ai: 由 ContentGenerator 产出，交给 ContentGenSystem 落库。
+/// @ai: 由 ContentGenerator 产出，交给 ContentGenSystem 落库（plan 仅内存展示，不落库）。
 struct GeneratedArticle: Sendable, Equatable {
     let body: String
     let spans: [SpanInfo]
     let generatorId: String
     let tier: QualityTier
+    /// 写作前的规划/大纲（规划 pass 产出，仅用于 UI 展示思考过程）。
+    var plan: String?
+    /// 策略 pass 决策（生成方式/改写窗口/嵌入兜底，仅用于 UI 展示思考链）。
+    var strategy: GenStrategy?
+    /// 未能自然融入的目标词（模型结构化报告，仅 UI 展示，不落库）。
+    var skippedWords: [SkippedWord] = []
 }
 
 /// 文章中一个目标词的 span 信息（字符偏移 + 词元映射 + 替换来源）。

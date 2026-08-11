@@ -56,6 +56,10 @@ enum ComponentID: String, Sendable, Codable, CaseIterable {
     case customData = "custom_data"
     case importFailure = "import_failure"
     case analyticsCache = "analytics_cache"
+    /// 用户词汇掌握度（全局上下文，挂 Lemma）。
+    case userKnown = "user_known"
+    /// 多来源释义（挂 Lemma）。
+    case lemmaDefinition = "lemma_definition"
 }
 
 // MARK: - Rating
@@ -97,6 +101,22 @@ enum QualityTier: String, Sendable, Codable, CaseIterable {
     case remote
 }
 
+// MARK: - EmbeddingVerification（逐词融入验证强度）
+
+/// 逐词融入的验证强度：按模型大小 / token 速率 / 云端 API 选择。
+/// @ai: 轻量=本地慢速小模型；标准=通用；严格=云端 API / 大模型。
+enum EmbeddingVerification: String, CaseIterable, Identifiable, Codable, Sendable {
+    case light, standard, strict
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .light: return "轻量（本地小模型）"
+        case .standard: return "标准（推荐）"
+        case .strict: return "严格（云端/大模型）"
+        }
+    }
+}
+
 // MARK: - GenerationConstraints
 
 struct GenerationConstraints: Sendable, Codable {
@@ -104,4 +124,56 @@ struct GenerationConstraints: Sendable, Codable {
     var language: String = "auto"
     var preserveTone: Bool = true
     var synonymDistance: Double = 0.4
+    /// 逐词融入验证强度（generate-rewrite 路径）。nil=默认 standard。
+    var embeddingVerification: EmbeddingVerification = .standard
+    /// 造文模式的用户主题（如 "科技趋势"、"环保"）。改写模式忽略。
+    var topic: String?
+}
+
+// MARK: - GeneratorTier（生成方式）
+
+/// 生成器档位：进程内本地（swift-llama-cpp）/ 远端 LLM（Ollama 或 OpenAI API）。
+/// @ai: 纯规则档已按用户要求移除；Ollama 属于远端。
+enum GeneratorTier: String, Sendable, Codable, CaseIterable, Identifiable {
+    case processLocal = "进程内本地"
+    case remote = "远端 LLM"
+    var id: String { rawValue }
+}
+
+// MARK: - RemoteProvider（远端服务类型）
+
+/// 远端 LLM 服务：Ollama（本机 / 局域网）或 OpenAI API（云端）。
+enum RemoteProvider: String, Sendable, Codable, CaseIterable, Identifiable {
+    case ollama = "Ollama"
+    case openai = "OpenAI API"
+    var id: String { rawValue }
+
+    var defaultModel: String {
+        switch self {
+        case .ollama: return "qwen2.5"
+        case .openai: return "gpt-4o-mini"
+        }
+    }
+
+    var defaultBaseURL: String {
+        switch self {
+        case .ollama: return "http://localhost:11434/v1"
+        case .openai: return "https://api.openai.com/v1"
+        }
+    }
+
+    /// OpenAI API 需要 API Key；Ollama 本地可留空。
+    var needsAPIKey: Bool {
+        switch self {
+        case .ollama: return false
+        case .openai: return true
+        }
+    }
+
+    var hint: String {
+        switch self {
+        case .ollama: return "本机已装 Ollama：先 `ollama serve` 并 `ollama pull <模型名>`"
+        case .openai: return "云端 API：需要有效 API Key（联网，默认关闭）"
+        }
+    }
 }
