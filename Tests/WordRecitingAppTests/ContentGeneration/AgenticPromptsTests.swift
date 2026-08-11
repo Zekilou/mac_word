@@ -138,6 +138,31 @@ final class AgenticPromptsTests: XCTestCase {
         XCTAssertEqual(AgenticPrompts.extractMarkedBody("===ARTICLE_START===半截"), "半截")
     }
 
+    // MARK: - 标记容错（小模型变体）
+
+    func testExtractMarkedBodyTolerantVariants() {
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody(
+            "=== ARTICLE_START ===\nHello.\n=== ARTICLE_END ==="), "Hello.", "空格变体")
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody(
+            "<article_start>\nHello.\n<article_end>"), "Hello.", "尖括号变体")
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody(
+            "===ARTICLE_START===\r\nHello.\r\n===ARTICLE_END===\r\n"), "Hello.", "CRLF 变体")
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody(
+            "intro\n===ARTICLE_START===\nHello.\n===ARTICLE_END===\noutro"), "Hello.", "标记外内容丢弃")
+    }
+
+    func testExtractMarkedBodyKeepsNormalText() {
+        let text = "The article started yesterday and ended today."
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody(text), text, "正常句子不应被误剥")
+    }
+
+    func testStrippingMarkerLinesRemovesOnlyMarkerLines() {
+        XCTAssertEqual(AgenticPrompts.strippingMarkerLines(
+            "===ARTICLE_START===\nHello.\n<article_end>"), "Hello.")
+        XCTAssertEqual(AgenticPrompts.strippingMarkerLines(
+            "Hello world."), "Hello world.", "无标记行原样保留")
+    }
+
     func testPlainPromptContainsMarkerInstruction() {
         let p = GenStrategyPrompt.plainPrompt(theme: "科技", maxWords: 100)
         XCTAssertTrue(p.contains("===ARTICLE_START==="), "纯净草稿应要求标记")

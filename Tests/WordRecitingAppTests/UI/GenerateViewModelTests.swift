@@ -262,4 +262,12 @@ final class GenerateViewModelTests: XCTestCase {
         vm.stopGenerating()
         XCTAssertFalse(vm.isGenerating)
     }
+
+    @MainActor func testTokenStreamStripsMarkerLines() {
+        let vm = makeVM()
+        vm.applyProgress(.token("===ARTICLE_START===\nHello."))
+        XCTAssertEqual(vm.streamedText, "Hello.", "实时展示应剥离独立标记行")
+        vm.applyProgress(.token(" world\n===ARTICLE_END==="))
+        XCTAssertEqual(vm.streamedText, "Hello. world", "结束标记行也应剥离")
+    }
 }

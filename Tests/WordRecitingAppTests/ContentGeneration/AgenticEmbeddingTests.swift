@@ -257,6 +257,56 @@ final class AgenticEmbeddingTests: XCTestCase {
         XCTAssertEqual(article.strategy?.mode, .generateRewrite)
     }
 
+    /// 模型输出变体标记（加空格）时，最终正文必须干净（容错剥离）。
+    func testGenerateViaRewriteStripsVariantMarkersFromFinalBody() async throws {
+        let appDB = try AppDatabase.inMemory()
+        let world = World(database: appDB)
+        let graph = world.graph
+        let now = Date()
+        let ids = ["lemma-1", "lemma-2"]
+        let batch = ImportBatch(
+            deckId: "deck-1",
+            nodes: [
+                .init(id: "deck-1", kind: .deck, createdAt: now),
+                .init(id: "lemma-1", kind: .lemma, createdAt: now),
+                .init(id: "lemma-2", kind: .lemma, createdAt: now),
+            ],
+            textComponents: [
+                TextComponent(entityId: ids[0], textA: "abandon", textB: nil, language: "en"),
+                TextComponent(entityId: ids[1], textA: "battle", textB: nil, language: "en"),
+            ],
+            deckMetas: [DeckMetaComponent(
+                entityId: "deck-1", name: "T", sourceKind: "csv",
+                sourcePath: nil, importedAt: now)],
+            edges: [], failures: [])
+        try world.run(ImportSystem(), context: batch)
+
+        let client = SeqClient(responses: [
+            "STRATEGY: generate-rewrite\nWINDOW: sentence\nFALLBACK: skip",
+            "=== ARTICLE_START ===\nA normal article about daily life. People wake up, work, and rest each day.\n=== ARTICLE_END ===",
+            "{\"abandon\": {\"index\": 0, \"associations\": \"x\"}, \"battle\": {\"index\": 1, \"associations\": \"y\"}}",
+            "We should never abandon our dreams.",
+            "Yes.",
+            "The battle continues every day.",
+            "Yes.",
+            "We should never abandon our dreams.\nThe battle continues every day.",
+            "We should never abandon our dreams.\nThe battle continues every day.",
+        ])
+        let gen = LocalLLMGenerator(client: client)
+        let article = try await gen.generate(
+            mode: .generate, sourceText: "科技", targetLemmas: ids,
+            constraints: GenerationConstraints(), graph: graph)
+
+        XCTAssertFalse(article.body.contains("ARTICLE_START"), "变体开标记不应残留: \(article.body)")
+        XCTAssertFalse(article.body.contains("ARTICLE_END"), "变体结束标记不应残留: \(article.body)")
+        XCTAssertFalse(article.body.contains("<article"), "尖括号变体不应残留")
+        XCTAssertTrue(article.body.lowercased().contains("abandon"), "正文: \(article.body)")
+        XCTAssertTrue(article.body.lowercased().contains("battle"), "正文: \(article.body)")
+        let spanLemmas = Set(article.spans.compactMap { $0.lemmaId })
+        XCTAssertTrue(spanLemmas.contains(ids[0]))
+        XCTAssertTrue(spanLemmas.contains(ids[1]))
+    }
+
     /// 全部词都融不进：换锚点仍失败 → 跳过 + 结构化报告。
     func testGenerateViaRewriteSkipsAndReports() async throws {
         let appDB = try AppDatabase.inMemory()

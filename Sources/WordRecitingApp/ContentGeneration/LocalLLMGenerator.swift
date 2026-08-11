@@ -153,7 +153,7 @@ struct LocalLLMGenerator: ContentGenerator {
             let clean = streamBox.buffer.append(token)
             if !clean.isEmpty { onProgress?(.token(clean)) }
         }
-        var body = Self.cleanArticle(streamBox.buffer.finalize())
+        var body = AgenticPrompts.extractMarkedBody(streamBox.buffer.rawAll)
         onProgress?(.thought(GenThought(
             id: "draft", kind: .generating,
             message: "生成正文完成（\(streamBox.buffer.rawAll.count) 字符）", detail: nil, status: .done)))
@@ -172,13 +172,15 @@ struct LocalLLMGenerator: ContentGenerator {
                     if !clean.isEmpty { onProgress?(.token(clean)) }
                 })
             if let polished, !polished.isEmpty {
-                let cleaned = Self.cleanArticle(polishBox.buffer.finalize())
+                let cleaned = AgenticPrompts.extractMarkedBody(polishBox.buffer.rawAll)
                 if !cleaned.isEmpty { body = cleaned }
             }
             onProgress?(.thought(GenThought(
                 id: "polish", kind: .polishing,
                 message: "润色完成", detail: nil, status: .done)))
         }
+        // 最终正文兜底：容错剥离标记（防变体标记漏进展示）
+        body = AgenticPrompts.extractMarkedBody(body)
         var spans = Self.findTargetSpans(body: body, surfaces: surfaces)
 
         // fallback：LLM 未嵌目标词 → 用规则替换把文中同义词替换为缺失词。

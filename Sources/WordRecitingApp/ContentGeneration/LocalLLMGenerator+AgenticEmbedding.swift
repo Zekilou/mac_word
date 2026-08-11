@@ -26,7 +26,7 @@ extension LocalLLMGenerator {
             let clean = draftBox.buffer.append(token)
             if !clean.isEmpty { onProgress?(.token(clean)) }
         }
-        var body = Self.cleanArticle(draftBox.buffer.finalize())
+        var body = AgenticPrompts.extractMarkedBody(draftBox.buffer.rawAll)
         onProgress?(.thought(GenThought(
             id: "draft", kind: .generating,
             message: "草稿完成（\(draftBox.buffer.rawAll.count) 字符）", detail: nil, status: .done)))
@@ -215,6 +215,9 @@ extension LocalLLMGenerator {
                 finalBody = rewritten.body
             }
         }
+
+        // 最终正文兜底：容错剥离标记（防变体标记漏进展示）
+        finalBody = AgenticPrompts.extractMarkedBody(finalBody)
 
         return GeneratedArticle(
             body: finalBody,

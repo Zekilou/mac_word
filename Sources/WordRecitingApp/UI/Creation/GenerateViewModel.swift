@@ -142,6 +142,8 @@ final class GenerateViewModel {
             }
         case .token(let text):
             streamedText += text
+            // 实时展示兜底：剥离独立标记行（防变体标记闪进流式视图）
+            streamedText = AgenticPrompts.strippingMarkerLines(streamedText)
             let now = Date()
             if phaseStartAt == nil { phaseStartAt = now }
             if !firstTokenSeen {

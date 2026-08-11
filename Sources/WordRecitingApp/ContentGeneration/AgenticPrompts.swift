@@ -201,20 +201,57 @@ enum AgenticPrompts {
     static let articleStart = "===ARTICLE_START==="
     static let articleEnd = "===ARTICLE_END==="
 
-    /// 提取两个标记之间的正文；标记缺失/半截回退 cleanArticle 全量。
+    /// 提取两个标记之间的正文（容错：允许空格/换行/大小写/`<article>` 等变体）；无标记回退全量。
+    /// @ai: 先归一化变体标记为规范形式（仅匹配被 =/<> 包裹的标记，不误伤正常短语），再按范围提取；
+    /// 开标记之前与结束标记之后的内容一律丢弃。
     static func extractMarkedBody(_ raw: String) -> String {
-        let s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let start = s.range(of: articleStart) else {
-            return LocalLLMGenerator.cleanArticle(s)
+        let normalized = normalizeMarkers(raw)
+        guard let start = normalized.range(of: articleStart) else {
+            return LocalLLMGenerator.cleanArticle(normalized)
         }
         let inner: String
-        if let endRange = s.range(of: articleEnd) {
-            inner = String(s[start.upperBound..<endRange.lowerBound])
+        if let endRange = normalized.range(of: articleEnd) {
+            inner = String(normalized[start.upperBound..<endRange.lowerBound])
         } else {
             // 有开标记但结束标记缺失（半截正文）：取开标记之后的内容
-            inner = String(s[start.upperBound...])
+            inner = String(normalized[start.upperBound...])
         }
         let cleaned = LocalLLMGenerator.cleanArticle(inner)
-        return cleaned.isEmpty ? LocalLLMGenerator.cleanArticle(s) : cleaned
+        return cleaned.isEmpty ? LocalLLMGenerator.cleanArticle(normalized) : cleaned
     }
+
+    /// 移除文本中的独立标记行（容错变体）；实时展示用（逐 token 累积后调用，防止标记行闪进流式视图）。
+    static func strippingMarkerLines(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: false)
+            .map(String.init)
+            .filter { !isStartMarker(compactMarker($0)) && !isEndMarker(compactMarker($0)) }
+            .joined(separator: "\n")
+    }
+
+    /// 归一化变体标记为规范形式（=== ARTICLE_START === / <article_start> → ===ARTICLE_START===）。
+    /// @ai: 正则要求标记被 =/<> 包裹才匹配，start/end 互不干扰；规范模板无 $/\\ 特殊字符，可直接作替换模板。
+    private static func normalizeMarkers(_ text: String) -> String {
+        let endPattern = #"[=<>]+[^a-z0-9]*article[ _-]*end[^a-z0-9]*[=<>]+"#
+        let startPattern = #"[=<>]+[^a-z0-9]*article[ _-]*start[^a-z0-9]*[=<>]+"#
+        var out = text
+        if let re = try? NSRegularExpression(pattern: endPattern, options: [.caseInsensitive]) {
+            out = re.stringByReplacingMatches(
+                in: out, options: [], range: NSRange(out.startIndex..., in: out),
+                withTemplate: articleEnd)
+        }
+        if let rs = try? NSRegularExpression(pattern: startPattern, options: [.caseInsensitive]) {
+            out = rs.stringByReplacingMatches(
+                in: out, options: [], range: NSRange(out.startIndex..., in: out),
+                withTemplate: articleStart)
+        }
+        return out
+    }
+
+    /// 归一化标记行：仅保留字母数字并小写（=== ARTICLE_START === / <article_start> → "articlestart"）。
+    private static func compactMarker(_ s: String) -> String {
+        String(s.lowercased().filter { $0.isLetter || $0.isNumber })
+    }
+
+    private static func isStartMarker(_ compact: String) -> Bool { compact == "articlestart" }
+    private static func isEndMarker(_ compact: String) -> Bool { compact == "articleend" }
 }
