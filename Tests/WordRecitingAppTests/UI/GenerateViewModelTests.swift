@@ -227,4 +227,39 @@ final class GenerateViewModelTests: XCTestCase {
         XCTAssertEqual(vm.skippedReason(for: "abandon"), "no fit")
         XCTAssertNil(vm.skippedReason(for: "battle"))
     }
+
+    // MARK: - 思考日志 + Token 指标
+
+    @MainActor func testThoughtEventsUpsertLog() {
+        let vm = makeVM()
+        vm.applyProgress(.thought(GenThought(
+            id: "strategy", kind: .strategy, message: "正在制定生成策略…", detail: nil, status: .running)))
+        XCTAssertEqual(vm.thinkingLog.count, 1)
+        vm.applyProgress(.thought(GenThought(
+            id: "strategy", kind: .strategy, message: "策略：先写后改写", detail: nil, status: .done)))
+        XCTAssertEqual(vm.thinkingLog.count, 1, "同 id 应 upsert")
+        XCTAssertEqual(vm.thinkingLog[0].message, "策略：先写后改写")
+        XCTAssertEqual(vm.thinkingLog[0].status, .done)
+    }
+
+    @MainActor func testStreamStatsTracksTokensAndRate() async throws {
+        let vm = makeVM()
+        vm.applyProgress(.stage(.generating))
+        vm.applyProgress(.token("Hello"))
+        let s1 = vm.streamStats
+        XCTAssertEqual(s1.tokens, 1)
+        XCTAssertNotNil(s1.firstTokenLatency)
+        XCTAssertGreaterThanOrEqual(s1.rate, 0)
+        try await Task.sleep(nanoseconds: 10_000_000)   // 保证 elapsed > 0，速率断言不 flaky
+        vm.applyProgress(.token(" world"))
+        XCTAssertEqual(vm.streamStats.tokens, 2)
+        XCTAssertGreaterThan(vm.streamStats.rate, 0, "速率应随 token 增长")
+    }
+
+    @MainActor func testStopCancelsGeneration() async throws {
+        let vm = makeVM()
+        // 无活动任务时 stop 不崩
+        vm.stopGenerating()
+        XCTAssertFalse(vm.isGenerating)
+    }
 }

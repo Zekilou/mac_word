@@ -86,6 +86,12 @@ final class GenerateViewModel {
 
     /// 本次生成在全局活动中心的注册 id（进程守护显示用）。
     private var activityID: UUID?
+    /// 本次生成开始时间（日志条目耗时基准）。
+    private var genStartedAt: Date?
+    /// 当前流式阶段开始时间。
+    private var phaseStartAt: Date?
+    /// 是否已收到首个正文 token。
+    private var firstTokenSeen = false
 
     /// 本次生成的写作计划（规划 pass 产出，展示思考过程）。
     var lastPlan: String?
@@ -97,6 +103,10 @@ final class GenerateViewModel {
     var embedWordProgress: EmbedWordProgress?
     /// 未能自然融入的目标词（结构化报告，UI 覆盖 ✗ chip 悬停显示原因）。
     var lastSkipped: [SkippedWord] = []
+    /// 思考日志（生成过程中实时累积，路由到左侧进度区）。
+    var thinkingLog: [ThinkingLogItem] = []
+    /// 当前流式阶段指标（首 token/速率/token 数）。
+    var streamStats = StreamStats()
 
     /// 进度回调：阶段切换 + 流式 token + 逐词进度 → 切回主线程更新 UI。
     private var progressHandler: @Sendable (GenProgress) -> Void {
@@ -112,6 +122,11 @@ final class GenerateViewModel {
         switch progress {
         case .stage(let stage):
             genStage = stage
+            if stage == .generating || stage == .polishing {
+                phaseStartAt = Date()
+                firstTokenSeen = false
+                streamStats = StreamStats()
+            }
             if let id = activityID {
                 let p: Double
                 let msg: String
@@ -127,11 +142,29 @@ final class GenerateViewModel {
             }
         case .token(let text):
             streamedText += text
+            let now = Date()
+            if phaseStartAt == nil { phaseStartAt = now }
+            if !firstTokenSeen {
+                firstTokenSeen = true
+                streamStats.firstTokenLatency = now.timeIntervalSince(phaseStartAt!)
+            }
+            streamStats.tokens += 1
+            let elapsed = now.timeIntervalSince(phaseStartAt!)
+            if elapsed > 0 { streamStats.rate = Double(streamStats.tokens) / elapsed }
         case .word(let done, let total, let word):
             embedWordProgress = EmbedWordProgress(done: done, total: total, word: word)
         case .thought(let thought):
-            // TODO(Task 4): upsert 到 thinkingLog
-            _ = thought
+            let elapsed = Date().timeIntervalSince(genStartedAt ?? Date())
+            if let idx = thinkingLog.firstIndex(where: { $0.id == thought.id }) {
+                thinkingLog[idx] = ThinkingLogItem(
+                    id: thought.id, kind: thought.kind, message: thought.message,
+                    detail: thought.detail, status: thought.status,
+                    elapsedAt: thinkingLog[idx].elapsedAt)
+            } else {
+                thinkingLog.append(ThinkingLogItem(
+                    id: thought.id, kind: thought.kind, message: thought.message,
+                    detail: thought.detail, status: thought.status, elapsedAt: elapsed))
+            }
         }
     }
 
@@ -254,6 +287,11 @@ final class GenerateViewModel {
         coverage = []
         embedWordProgress = nil
         lastSkipped = []
+        thinkingLog = []
+        streamStats = StreamStats()
+        genStartedAt = Date()
+        phaseStartAt = nil
+        firstTokenSeen = false
         do {
             persistSettings()
             let targetIds = try resolveTargets()
@@ -292,6 +330,11 @@ final class GenerateViewModel {
                         }
                         return
                     }
+                    await MainActor.run { [weak self] in
+                        self?.applyProgress(.thought(GenThought(
+                            id: "save", kind: .saving,
+                            message: "正在保存…", detail: nil, status: .running)))
+                    }
                     try world.run(ContentGenSystem(), context: ContentGenContext(
                         article: article, targetLemmas: targetIds,
                         sourceText: topic, topic: topic, mode: .generate))
@@ -303,10 +346,21 @@ final class GenerateViewModel {
                         self.lastSkipped = article.skippedWords
                         self.coverage = Self.computeCoverage(
                             article: article, targetIds: targetIds, graph: world.graph)
+                        self.applyProgress(.thought(GenThought(
+                            id: "save", kind: .saving,
+                            message: "保存完成", detail: nil, status: .done)))
                         self.genStage = nil
                         self.streamedText = ""
                         self.isGenerating = false
                         self.loadHistory()
+                    }
+                } catch is CancellationError {
+                    await MainActor.run { [weak self] in
+                        guard let self else { return }
+                        self.isGenerating = false
+                        self.applyProgress(.thought(GenThought(
+                            id: "info", kind: .info,
+                            message: "已取消", detail: nil, status: .done)))
                     }
                 } catch {
                     await MainActor.run { [weak self] in
@@ -315,6 +369,11 @@ final class GenerateViewModel {
                     }
                 }
             }
+        } catch is CancellationError {
+            isGenerating = false
+            applyProgress(.thought(GenThought(
+                id: "info", kind: .info,
+                message: "已取消", detail: nil, status: .done)))
         } catch {
             errorMessage = "\(error)"
             isGenerating = false
@@ -366,6 +425,29 @@ final class GenerateViewModel {
     func skippedReason(for word: String) -> String? {
         lastSkipped.first { $0.word == word }?.reason
     }
+
+    /// 停止当前生成（取消全局活动中心任务；步间生效）。
+    func stopGenerating() {
+        guard let id = activityID, isGenerating else { return }
+        GlobalActivityCenter.shared.cancel(id)
+    }
+}
+
+/// 思考日志条目（VM 侧，按生成器 thought 事件 upsert）。
+struct ThinkingLogItem: Identifiable, Equatable, Sendable {
+    let id: String
+    let kind: GenThought.Kind
+    var message: String
+    var detail: String?
+    var status: GenThought.Status
+    let elapsedAt: TimeInterval
+}
+
+/// 流式阶段实时指标。
+struct StreamStats: Equatable, Sendable {
+    var firstTokenLatency: TimeInterval?
+    var tokens: Int = 0
+    var rate: Double = 0
 }
 
 /// 逐词融入进度（供进度条下方显示「3/10 battle」）。
