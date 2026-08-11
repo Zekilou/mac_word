@@ -156,8 +156,15 @@ struct GenerateView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(vm.isGenerating)
-                    if vm.isGenerating { progressSection }
                     Spacer()
+                }
+
+                if vm.isGenerating {
+                    GenThinkingLogView(
+                        log: vm.thinkingLog,
+                        stats: vm.streamStats,
+                        isGenerating: vm.isGenerating,
+                        onStop: { vm.stopGenerating() })
                 }
 
                 if let err = vm.errorMessage {
@@ -221,23 +228,6 @@ struct GenerateView: View {
             Text("从「\(vm.wordFilter.label)」的词中随机选 \(max(1, vm.randomCount)) 个作为目标词")
                 .font(.caption2).foregroundStyle(.tertiary)
         }
-    }
-
-    /// 生成进度：阶段标签 + 步骤进度条（生成→自查→保存 共 3 步，可预测）。
-    private var progressSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ProgressView(
-                value: Double((vm.genStage?.rawValue ?? 0) + 1),
-                total: Double(GenStage.allCases.count))
-                .progressViewStyle(.linear)
-            Text(vm.genStage?.label ?? "正在生成…")
-                .font(.caption).foregroundStyle(.secondary)
-            if let p = vm.embedWordProgress {
-                Text("正在融入 \(p.done + 1)/\(p.total)：\(p.word)")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: 180)
     }
 
     /// 生成过程中的实时流式输出（打字机效果）。
