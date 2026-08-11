@@ -93,35 +93,42 @@ final class GenerateViewModel {
     var lastStrategy: GenStrategy?
     /// 目标词覆盖统计：每个目标词是否成功嵌入正文。
     var coverage: [WordCoverage] = []
+    /// 逐词融入进度（generate-rewrite 时实时更新）。
+    var embedWordProgress: EmbedWordProgress?
+    /// 未能自然融入的目标词（结构化报告，UI 覆盖 ✗ chip 悬停显示原因）。
+    var lastSkipped: [SkippedWord] = []
 
-    /// 进度回调：阶段切换 + 流式 token → 切回主线程更新 UI。
+    /// 进度回调：阶段切换 + 流式 token + 逐词进度 → 切回主线程更新 UI。
     private var progressHandler: @Sendable (GenProgress) -> Void {
         { [weak self] progress in
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                switch progress {
-                case .stage(let stage):
-                    self.genStage = stage
-                    if let id = self.activityID {
-                        let p: Double
-                        let msg: String
-                        switch stage {
-                        case .strategy: p = 0.05; msg = "正在制定生成策略…"
-                        case .planning: p = 0.15; msg = "正在联想打草稿…"
-                        case .generating: p = 0.4; msg = "正在生成正文…"
-                        case .embedding: p = 0.55; msg = "正在逐词融入…"
-                        case .polishing: p = 0.75; msg = "正在改写润色…"
-                        case .saving: p = 0.95; msg = "正在保存…"
-                        }
-                        GlobalActivityCenter.shared.update(id, progress: p, message: msg)
-                    }
-                case .token(let text):
-                    self.streamedText += text
-                case .word:
-                    // 逐词融入进度：后续任务接入 embedWordProgress 展示
-                    break
-                }
+                self?.applyProgress(progress)
             }
+        }
+    }
+
+    /// 应用一次进度事件（主线程；progressHandler 与测试共用）。
+    func applyProgress(_ progress: GenProgress) {
+        switch progress {
+        case .stage(let stage):
+            genStage = stage
+            if let id = activityID {
+                let p: Double
+                let msg: String
+                switch stage {
+                case .strategy: p = 0.05; msg = "正在制定生成策略…"
+                case .planning: p = 0.15; msg = "正在联想打草稿…"
+                case .generating: p = 0.4; msg = "正在生成正文…"
+                case .embedding: p = 0.55; msg = "正在逐词融入…"
+                case .polishing: p = 0.8; msg = "正在改写润色…"
+                case .saving: p = 0.95; msg = "正在保存…"
+                }
+                GlobalActivityCenter.shared.update(id, progress: p, message: msg)
+            }
+        case .token(let text):
+            streamedText += text
+        case .word(let done, let total, let word):
+            embedWordProgress = EmbedWordProgress(done: done, total: total, word: word)
         }
     }
 
@@ -242,6 +249,8 @@ final class GenerateViewModel {
         lastPlan = nil
         lastStrategy = nil
         coverage = []
+        embedWordProgress = nil
+        lastSkipped = []
         do {
             persistSettings()
             let targetIds = try resolveTargets()
@@ -288,6 +297,7 @@ final class GenerateViewModel {
                         self.resultArticle = article
                         self.lastPlan = article.plan
                         self.lastStrategy = article.strategy
+                        self.lastSkipped = article.skippedWords
                         self.coverage = Self.computeCoverage(
                             article: article, targetIds: targetIds, graph: world.graph)
                         self.genStage = nil
@@ -348,6 +358,18 @@ final class GenerateViewModel {
             return false
         }
     }
+
+    /// 覆盖 ✗ chip 的悬停原因（来自跳过词结构化报告）。
+    func skippedReason(for word: String) -> String? {
+        lastSkipped.first { $0.word == word }?.reason
+    }
+}
+
+/// 逐词融入进度（供进度条下方显示「3/10 battle」）。
+struct EmbedWordProgress: Equatable, Sendable {
+    let done: Int
+    let total: Int
+    let word: String
 }
 
 /// 生成结果中单个目标词的命中状态。
