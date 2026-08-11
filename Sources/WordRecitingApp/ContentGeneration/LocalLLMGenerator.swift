@@ -27,6 +27,21 @@ enum GenProgress: Sendable {
     case token(String)
     /// 逐词融入进度：已处理（0 基）/总数/当前词。
     case word(done: Int, total: Int, word: String)
+    /// 一条思考记录（供左侧进度区渲染思考日志）。
+    case thought(GenThought)
+}
+
+/// 生成过程中的一条思考记录（VM 按 id upsert 成日志）。
+struct GenThought: Sendable {
+    enum Kind: String, CaseIterable, Sendable {
+        case strategy, planning, generating, embedding, polishing, saving, info
+    }
+    enum Status: String, Sendable { case running, done, failed }
+    let id: String
+    let kind: Kind
+    let message: String
+    let detail: String?
+    let status: Status
 }
 
 /// 本地 LLM 造文/改写生成器（tier = .local）。

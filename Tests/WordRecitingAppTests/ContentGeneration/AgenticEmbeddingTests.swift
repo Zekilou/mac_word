@@ -339,4 +339,15 @@ final class AgenticEmbeddingTests: XCTestCase {
         XCTAssertFalse(box.values[0].contains("0:"), "长文不应调用带全文的锚点 prompt")
         XCTAssertTrue(box.values[0].contains("JSON"))
     }
+
+    // MARK: - 思考事件类型
+
+    func testGenThoughtFields() {
+        let t = GenThought(
+            id: "strategy", kind: .strategy,
+            message: "策略：先写后改写", detail: nil, status: .done)
+        XCTAssertEqual(t.kind, .strategy)
+        XCTAssertEqual(t.status, .done)
+        XCTAssertEqual(GenThought.Kind.allCases.count, 7)
+    }
 }

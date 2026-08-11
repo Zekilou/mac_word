@@ -129,6 +129,9 @@ final class GenerateViewModel {
             streamedText += text
         case .word(let done, let total, let word):
             embedWordProgress = EmbedWordProgress(done: done, total: total, word: word)
+        case .thought(let thought):
+            // TODO(Task 4): upsert 到 thinkingLog
+            _ = thought
         }
     }
 
