@@ -192,21 +192,23 @@ final class RuleBasedGeneratorTests: XCTestCase {
         XCTAssertEqual(article.spans.count, 0)
     }
 
-    // MARK: - generate 模式不处理
+    // MARK: - generate 模式：快速造文（模板 + 目标词嵌入）
 
-    func testGenerateModeReturnsSourceAsIs() async throws {
+    func testGenerateModeProducesArticleWithTargetWords() async throws {
         try setupLemmas()
         let gen = RuleBasedGenerator()
         let article = try await gen.generate(
             mode: .generate,
-            sourceText: "I will abandon this.",
+            sourceText: "科技趋势",
             targetLemmas: ["B"],
             constraints: GenerationConstraints(),
             graph: graph)
 
-        // generate 模式不做改写
-        XCTAssertEqual(article.body, "I will abandon this.")
-        XCTAssertEqual(article.spans.count, 0)
+        // generate 模式应产出非空文章，且包含目标词 B（lemma B 表面形式来自 setupLemmas）
+        XCTAssertFalse(article.body.isEmpty, "造文应产出非空正文")
+        XCTAssertEqual(article.spans.count, 1, "应标记 1 个目标词 span")
+        XCTAssertEqual(article.spans.first?.lemmaId, "B")
+        XCTAssertEqual(article.spans.first?.isTarget, true)
     }
 
     // MARK: - 协议元数据

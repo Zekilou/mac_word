@@ -1,145 +1,279 @@
 import SwiftUI
 
-/// 应用主壳：左栏持久导航（hamburger 可收折）+ 右内容区（次级 Tab + 顶部 Edit 工具栏）。
-/// @ai: 严格贴合 user_profile：根层透明浮于 NSVisualEffectView 之上；背诵/分析阶段二/三启用。
+/// 应用主壳：三分栏 —— 一级区（数据/学习/设置，可收折）| 二级子区 | 内容区。
+/// @ai: 严格贴合 spec §3.2/§3.3：禁用原生标题栏、一级栏可折叠、二级联动当前区。
+/// 顶部保留全局活动条（悬浮胶囊形态后续任务替换）。
 struct ContentView: View {
     let world: World
-    @State private var sidebarCollapsed = false
+    @State private var zoneCollapsed = false
     @State private var section: AppSection = .creation
 
-    enum AppSection: String, CaseIterable, Identifiable {
-        case decks = "词库"
-        case creation = "创作"
-        case study = "背诵"
-        case analytics = "分析"
-        var id: String { rawValue }
-        var enabled: Bool {
-            switch self {
-            case .decks, .creation: return true
-            case .study, .analytics: return false
-            }
-        }
-        var hint: String {
-            switch self {
-            case .decks, .creation: return ""
-            case .study: return "阶段二"
-            case .analytics: return "阶段三"
-            }
-        }
-        var icon: String {
-            switch self {
-            case .decks: return "rectangle.stack"
-            case .creation: return "square.and.pencil"
-            case .study: return "book"
-            case .analytics: return "chart.bar"
-            }
-        }
-    }
-
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-                .frame(width: sidebarCollapsed ? 48 : 200)
-                .animation(.easeInOut(duration: 0.2), value: sidebarCollapsed)
-            Divider()
-            mainArea
+        // 最外层 GeometryReader 捕获真实顶部安全区高度（标题栏带高度），
+        // 之后三分栏内容用它手动下移；若直接整体 ignoresSafeArea，这里读到 0。
+        GeometryReader { geo in
+            let topInset = geo.safeAreaInsets.top
+            ZStack(alignment: .topLeading) {
+                // 内容层：占满全窗口（横向滚动内容可延伸到导航栏之下，被导航栏材质模糊）；
+                // 首项偏移在内容内部处理（GenerateView 横向滚动容器第一列前占位）
+                contentView(topInset: topInset)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.regularMaterial)
+                // 列间分割线（替代 HStack Divider，延伸至最顶）
+                vSeparator(offset: zoneCollapsed ? 48 : 150)
+                vSeparator(offset: (zoneCollapsed ? 48 : 150) + 140)
+                // 二级导航栏：背景条从窗口最左延伸到二级栏位置（一级宽+二级宽），内容在一级栏右侧
+                sectionSidebar(topInset: topInset)
+                // 左侧一级导航栏浮层：overlay 在二级导航栏之上（Finder 侧边栏质感）
+                zoneSidebar(topInset: topInset)
+                // 全局状态 = 左下角胶囊：圆角矩形，宽 < 一级折叠+二级导航栏总宽（188），多任务竖向堆叠
+                ActivityCapsuleView(center: .shared)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .padding(.leading, 4)
+                    .padding(.bottom, 4)
+            }
+            // 延伸至窗口最顶：栏体背景/分割线/内容背景进入标题栏带
+            .ignoresSafeArea(edges: .top)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // TODO(验证后删除)：临时演示胶囊实例（模拟实时进度，不消失便于调试）
+        .onAppear { startDemoActivity() }
+    }
+
+    /// 竖向分割线（全高，从窗口最顶开始）。
+    private func vSeparator(offset: CGFloat) -> some View {
+        Rectangle()
+            .fill(.separator)
+            .frame(width: 1)
+            .padding(.leading, offset)
+    }
+
+    /// 临时验证用：注册一个模拟实时进度的活动实例；进度循环不结束（debug 持续可见）。
+    /// @ai: 验证完成后删除本方法及其调用。
+    private func startDemoActivity() {
+        guard GlobalActivityCenter.shared.items.isEmpty else { return }
+        let id = GlobalActivityCenter.shared.begin(
+            title: "胶囊演示", icon: "sparkles", progress: 0.0, message: "调试中…")
+        Task {
+            var step = 0
+            while true {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                step += 1
+                let p = (Double(step % 12) + 1) / 12   // 0→1 循环
+                await MainActor.run {
+                    GlobalActivityCenter.shared.update(id, progress: p, message: "调试第 \(step) 步")
+                }
+            }
         }
     }
 
-    // MARK: - 侧栏
+    // MARK: - 一级栏（三区，可折叠）
 
-    private var sidebar: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Button(action: { withAnimation { sidebarCollapsed.toggle() } }) {
-                    Image(systemName: "line.3.horizontal")
-                        .frame(width: 20)
-                }
-                .buttonStyle(.borderless)
-                .help("收起 / 展开侧栏")
-                if !sidebarCollapsed {
-                    Text("WordReciting").font(.headline)
-                    Spacer()
+    private func zoneSidebar(topInset: CGFloat) -> some View {
+        // 顶部不再显示软件名（系统标题栏已显示）与分割线：
+        // 折叠按钮融入导航列表作首行，与二级首项同款同高，两栏顶部对齐。
+        VStack(spacing: 2) {
+            // 折叠控制：纯图标按钮（Apple 规范，SF Symbol + tooltip），无文字
+            Button(action: { withAnimation { zoneCollapsed.toggle() } }) {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 15))
+                    .frame(width: 20)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, alignment: zoneCollapsed ? .center : .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("收起 / 展开一级导航")
+            ForEach(AppZone.allCases) { z in
+                ZoneRowButton(
+                    z: z,
+                    selected: section.zone == z,
+                    collapsed: zoneCollapsed
+                ) {
+                    if let first = AppSection.allCases.first(where: { $0.zone == z }) {
+                        section = first
+                    }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            Divider()
-            VStack(spacing: 2) {
-                ForEach(AppSection.allCases) { s in
-                    navRow(s)
-                }
-            }
-            .padding(8)
+            // 吃满栏高，保证内容顶部对齐（与二级栏一致），不上下居中
             Spacer()
         }
+        .padding(8)
+        // 栏体延伸至顶，但内容从标题栏安全区下沿开始（topInset 由外层捕获，真实值）
+        .padding(.top, max(topInset, 28))
+        // 轻材质（.ultraThinMaterial）：overlay 浮在二级导航栏之上，模糊下层延伸内容
+        .background(.ultraThinMaterial)
+        // 一级浮在二级之上：右侧投影阴影区分层级
+        .shadow(color: .black.opacity(0.16), radius: 5, x: 2, y: 0)
+        .frame(width: zoneCollapsed ? 48 : 150, alignment: .topLeading)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .animation(.easeInOut(duration: 0.2), value: zoneCollapsed)
     }
 
-    private func navRow(_ s: AppSection) -> some View {
-        Button {
-            if s.enabled { section = s }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: s.icon)
-                    .frame(width: 20)
-                    .foregroundStyle(s.enabled ? .primary : .secondary)
-                if !sidebarCollapsed {
-                    Text(s.rawValue)
-                        .foregroundStyle(s.enabled ? .primary : .secondary)
-                    Spacer()
-                    if !s.enabled {
-                        Text(s.hint).font(.caption2).foregroundStyle(.tertiary)
+    // MARK: - 二级栏（当前一级的子区）
+
+    /// 二级栏：背景条从窗口最左延伸到二级栏位置（一级宽+二级宽），
+    /// 内容（子区导航项）位于一级栏右侧 140 宽内。
+    private func sectionSidebar(topInset: CGFloat) -> some View {
+        HStack(spacing: 0) {
+            Color.clear
+                .frame(width: zoneCollapsed ? 48 : 150)
+            VStack(spacing: 2) {
+                ForEach(AppSection.allCases.filter { $0.zone == section.zone }) { s in
+                    SectionRowButton(s: s, selected: section == s) {
+                        section = s
                     }
+                }
+                Spacer()
+            }
+            .padding(8)
+            .frame(width: 140)
+        }
+        .padding(.top, max(topInset, 28))
+        // 轻材质背景：从窗口最左延伸到二级栏位置
+        .background(.ultraThinMaterial)
+        .frame(width: (zoneCollapsed ? 48 : 150) + 140, alignment: .topLeading)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    // MARK: - 内容区
+
+    /// 内容区：创作页占满全窗（内部横向滚动首项占位 + 模糊）；
+    /// 其余页面由 `inset` 统一包成「列」（ColumnShell 标题头 + 内容）——
+    /// 内容从导航栏结束处开始、位于标题头下方，不再贴顶。
+    @ViewBuilder
+    private func contentView(topInset: CGFloat) -> some View {
+        let navWidth = CGFloat(zoneCollapsed ? 48 + 140 : 150 + 140)
+        switch section {
+        case .creation: CreationView(world: world, navLeadingWidth: navWidth, topInset: topInset)
+        case .decks: inset("词库", navWidth, topInset) { DeckManagerView(world: world) }
+        case .vocabulary: inset("词汇", navWidth, topInset) { VocabularyInitView(world: world) }
+        case .synonyms: inset("同义词", navWidth, topInset) { SynonymManagerView(world: world) }
+        case .rssSources: inset("RSS 源", navWidth, topInset) { RSSSourceManagerView() }
+        case .analytics: inset("分析", navWidth, topInset) { AnalyticsView(world: world) }
+        case .reading: inset("阅读", navWidth, topInset) { ReadingView(world: world) }
+        case .study: inset("背诵", navWidth, topInset) { StudyView(world: world) }
+        case .model: inset("模型", navWidth, topInset) { SettingsView() }
+        case .general: inset("通用", navWidth, topInset) { GeneralSettingsView() }
+        case .storage: inset("储存", navWidth, topInset) { StorageSettingsView(world: world) }
+        case .display: inset("显示", navWidth, topInset) { DisplaySettingsView() }
+        }
+    }
+
+    /// 占位包裹：页面包成「列」（ColumnShell 标题头 + 内容），
+    /// 内容从导航栏结束处（navWidth）开始、列头从安全区下沿（topInset）开始，占满剩余区域。
+    private func inset<Content: View>(
+        _ title: String, _ navWidth: CGFloat, _ topInset: CGFloat, @ViewBuilder _ c: () -> Content
+    ) -> some View {
+        HStack(spacing: 0) {
+            Color.clear.frame(width: navWidth)
+            ColumnShell(title: title) {
+                c().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .padding(.top, topInset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - 一级区导航行
+
+/// 一级区按钮：hover 反馈 + 选中高亮；折叠时仅图标居中。
+/// @ai: 不用 List（NSTableView 崩溃规避），自绘保证视觉一致。
+private struct ZoneRowButton: View {
+    let z: AppZone
+    let selected: Bool
+    let collapsed: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: z.icon)
+                    .font(.system(size: 15))
+                    .frame(width: 20)
+                    .foregroundStyle(selected ? Color.accentColor : .primary)
+                if !collapsed {
+                    Text(z.rawValue)
+                        .font(.system(size: 13))
+                    Spacer()
                 }
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(section == s ? Color.accentColor.opacity(0.15) : .clear)
+            .frame(maxWidth: .infinity, alignment: collapsed ? .center : .leading)
+            .background(background)
             .clipShape(RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!s.enabled)
+        .onHover { hovering = $0 }
+        .help(z.rawValue)
     }
 
-    // MARK: - 主区
+    private var background: Color {
+        if selected { return Color.accentColor.opacity(0.18) }
+        if hovering { return Color.primary.opacity(0.07) }
+        return .clear
+    }
+}
 
-    private var mainArea: some View {
-        VStack(spacing: 0) {
-            topBar
-            Divider()
-            content
+// MARK: - 二级子区导航行
+
+/// 二级子区按钮：与一级同款行样式（spec §3.2）。
+private struct SectionRowButton: View {
+    let s: AppSection
+    let selected: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: s.icon)
+                    .font(.system(size: 13))
+                    .frame(width: 18)
+                    .foregroundStyle(selected ? Color.accentColor : .secondary)
+                Text(s.rawValue)
+                    .font(.system(size: 13))
+                Spacer()
+            }
+            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(background)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(s.rawValue)
     }
 
-    private var topBar: some View {
-        HStack {
-            Text(section.rawValue).font(.title3).fontWeight(.semibold)
-            Spacer()
-            Button("Edit") {}
-                .buttonStyle(.bordered)
-                .disabled(true)
-                .help("编辑模式（阶段二启用）")
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+    private var background: Color {
+        if selected { return Color.accentColor.opacity(0.15) }
+        if hovering { return Color.primary.opacity(0.07) }
+        return .clear
     }
+}
 
-    @ViewBuilder
-    private var content: some View {
-        switch section {
-        case .decks: DeckManagerView(world: world)
-        case .creation: CreationView(world: world)
-        case .study: placeholder("背诵模块阶段二上线")
-        case .analytics: placeholder("分析模块阶段三上线")
-        }
-    }
+// MARK: - 占位页
 
-    private func placeholder(_ text: String) -> some View {
-        VStack {
-            Spacer()
-            Text(text).foregroundStyle(.secondary)
-            Spacer()
+/// 尚未实现的子区占位页（期 1 骨架用，后续任务逐个替换为真实页面）。
+struct PlaceholderPage: View {
+    let title: String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "hammer")
+                .font(.largeTitle)
+                .foregroundStyle(.secondary)
+            Text("\(title)（待实现）")
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

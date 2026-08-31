@@ -133,7 +133,8 @@ final class LocalLLMGeneratorTests: XCTestCase {
         XCTAssertTrue(first.contains("abandon"))
         XCTAssertTrue(first.contains("battle"))
         XCTAssertEqual(box.values.count, 2, "应有一次生成 + 一次自查")
-        XCTAssertTrue(box.values[1].contains("Review the following English article"))
+        XCTAssertTrue(box.values[1].contains("Review the English article below"),
+                      "自查 prompt 应使用独立干净指令上下文")
     }
 
     // MARK: - 清洗：markdown 围栏被剥离
@@ -180,7 +181,8 @@ final class LocalLLMGeneratorTests: XCTestCase {
         XCTAssertTrue(box.values[1].contains("planning"), "第二调用应为规划 prompt")
         XCTAssertTrue(box.values[2].contains("Writing plan to follow"),
                       "正文 prompt 应携带规划结果")
-        XCTAssertTrue(box.values[3].contains("Review the following English article"))
+        XCTAssertTrue(box.values[3].contains("Review the English article below"),
+                      "自查 prompt 应使用独立干净指令上下文")
         // 最终正文是自查后的干净版本
         XCTAssertFalse(article.body.contains("means to leave"),
                        "自查应删掉释义句，实际: \(article.body)")
@@ -206,6 +208,69 @@ final class LocalLLMGeneratorTests: XCTestCase {
             constraints: GenerationConstraints(),
             graph: graph)
         XCTAssertTrue(article.body.contains("We should not abandon our dreams"))
+    }
+
+    // MARK: - 无正文校验：整篇写作自述 → 生成失败，不落库
+
+    func testGenerateThrowsWhenSelfCheckFindsNoArticle() async throws {
+        let ids = try seedWords()
+        // 生成返回"写作自述"；自查确认无正文 → 输出 NO_ARTICLE → 应抛错
+        let client = SequenceMockClient(
+            responses: [
+                "STRATEGY: plan-embed\nWINDOW: whole\nFALLBACK: skip",
+                "- abandon: intro\n- battle: body\n- Intro\n- Body",
+                "The word 'esthetically' is the US spelling, I will use it.",
+                "NO_ARTICLE",
+            ],
+            onPrompt: { _ in })
+        let gen = LocalLLMGenerator(client: client)
+        do {
+            _ = try await gen.generate(
+                mode: .generate, sourceText: "科技", targetLemmas: ids,
+                constraints: GenerationConstraints(), graph: graph)
+            XCTFail("整篇自述且自查确认无正文时应抛错")
+        } catch let err as ArticleGenError {
+            XCTAssertEqual(err, .noArticle)
+        }
+    }
+
+    func testGenerateThrowsWhenBodyIsOnlySelfTalk() async throws {
+        let ids = try seedWords()
+        // 生成正文只有一句写作自述（含元注释短语），自查未返回有效正文 → 抛错不落库
+        let client = SequenceMockClient(
+            responses: [
+                "STRATEGY: plan-embed\nWINDOW: whole\nFALLBACK: skip",
+                "- abandon: intro\n- battle: body\n- Intro\n- Body",
+                "The word 'esthetically' is the US spelling, I will use it.",
+            ],
+            failCall: 4,   // 自查失败 → 保留原正文 → 最终校验判无正文
+            onPrompt: { _ in })
+        let gen = LocalLLMGenerator(client: client)
+        do {
+            _ = try await gen.generate(
+                mode: .generate, sourceText: "科技", targetLemmas: ids,
+                constraints: GenerationConstraints(), graph: graph)
+            XCTFail("正文只有写作自述时应抛错")
+        } catch let err as ArticleGenError {
+            XCTAssertEqual(err, .noArticle)
+        }
+    }
+
+    func testIsNoArticleHeuristic() {
+        XCTAssertTrue(LocalLLMGenerator.isNoArticle(""))
+        XCTAssertTrue(LocalLLMGenerator.isNoArticle("NO_ARTICLE"))
+        // 哨兵变体（模型常加括号/混合大小写/尖括号）也应拦截，防漏网落库
+        XCTAssertTrue(LocalLLMGenerator.isNoArticle("(No_article)"))
+        XCTAssertTrue(LocalLLMGenerator.isNoArticle("<NO_ARTICLE>"))
+        XCTAssertTrue(LocalLLMGenerator.isNoArticle("No Article"))
+        XCTAssertTrue(LocalLLMGenerator.isNoArticle(
+            "The word 'esthetically' is the US spelling, I will use it."))
+        XCTAssertTrue(LocalLLMGenerator.isNoArticle("Let me re-read the thought process"))
+        XCTAssertFalse(LocalLLMGenerator.isNoArticle(
+            "We should never abandon our dreams. The battle continues every day."))
+        XCTAssertFalse(LocalLLMGenerator.isNoArticle(
+            "I will go to the market and buy some tea."),
+            "普通短句不应误判为无正文")
     }
 
     // MARK: - 进度事件：阶段切换 + 流式 token
@@ -290,6 +355,28 @@ final class LocalLLMGeneratorTests: XCTestCase {
                       "应明确禁止释义句: \(prompt)")
     }
 
+    // MARK: - 提示词：禁止回显计划与任务元评论（防正文混入大纲）
+
+    func testPromptsForbidPlanEchoAndTaskMeta() {
+        let gp = LocalLLMGenerator.generatePrompt(
+            theme: "科技", words: ["abandon"], maxWords: 100,
+            plan: "- Paragraph 1: Intro\n- Paragraph 2: Body")
+        XCTAssertTrue(gp.contains("Do NOT repeat, restate, or quote the writing plan"),
+                      "正文 prompt 应禁止回显计划")
+        XCTAssertTrue(gp.contains("I am not sure whether my draft is ready"),
+                      "正文 prompt 应禁止任务元句")
+        XCTAssertTrue(gp.contains("NEVER narrate your own writing process"),
+                      "正文 prompt 应禁止写作过程自述")
+
+        let pp = LocalLLMGenerator.polishPrompt(article: "x")
+        XCTAssertTrue(pp.contains("plan, outline, or numbered list of paragraphs"),
+                      "自查 prompt 应要求删大纲块")
+        XCTAssertTrue(pp.contains("talk about the text itself"),
+                      "自查 prompt 应要求删任务元句")
+        XCTAssertTrue(pp.contains("narrates the writer's own thinking"),
+                      "自查 prompt 应要求删写作过程自述")
+    }
+
     // MARK: - 目标词词形变化也能被命中（小写归一）
 
     func testFindTargetSpansCaseInsensitive() {
@@ -345,6 +432,81 @@ final class LocalLLMGeneratorTests: XCTestCase {
         XCTAssertTrue(p.contains("WINDOW"))
         XCTAssertTrue(p.contains("FALLBACK"))
         XCTAssertTrue(p.contains("generate-rewrite"))
+    }
+
+    // MARK: - 思考型模型走 RAG 逐词管线（草稿不喂词，按需嵌入）
+
+    /// 思考型模型：不再全词单次（thinkingPrompt 已废除），改为草稿不喂词 → 逐词嵌入。
+    /// 首个 prompt（草稿）不得包含目标词列表，符合"按需查询"。
+    func testThinkingModeUsesDraftWithoutTargetWords() async throws {
+        let ids = try seedWords()
+        let box = PromptListBox()
+        let client = MockClient(response: """
+        ===ARTICLE_START===
+        We should never abandon our dreams. The battle continues every day.
+        ===ARTICLE_END===
+        """) { prompt in
+            box.values.append(prompt)
+        }
+        let gen = LocalLLMGenerator(client: client, isThinking: true)
+        let article = try await gen.generate(
+            mode: .generate,
+            sourceText: "科技",
+            targetLemmas: ids,
+            constraints: GenerationConstraints(),
+            graph: graph)
+
+        // 思考型走 generateViaRewrite：草稿 prompt 是 plainPrompt（不要求嵌入任何词）
+        let first = try XCTUnwrap(box.values.first)
+        XCTAssertTrue(first.contains("Write a natural, engaging English article"),
+                      "草稿应为正常写作指令")
+        XCTAssertFalse(first.contains("abandon, battle"),
+                       "草稿不应把目标词列表塞进 prompt（按需查询）")
+        XCTAssertFalse(first.contains("Work through the WHOLE task"),
+                       "不应再走全词单次的 thinkingPrompt")
+        // 最终正文应含目标词（逐词嵌入后）
+        XCTAssertTrue(article.body.contains("abandon"))
+        let spanLemmas = Set(article.spans.compactMap { $0.lemmaId })
+        XCTAssertTrue(spanLemmas.contains(ids[0]))
+    }
+
+    /// 思考型模型：模型只输出写作自述/NO_ARTICLE → 不落库抛错。
+    func testThinkingModeNoArticleThrows() async throws {
+        let ids = try seedWords()
+        let gen = LocalLLMGenerator(client: MockClient(response: "NO_ARTICLE"), isThinking: true)
+        do {
+            _ = try await gen.generate(
+                mode: .generate,
+                sourceText: "科技",
+                targetLemmas: ids,
+                constraints: GenerationConstraints(),
+                graph: graph)
+            XCTFail("应抛 ArticleGenError.noArticle")
+        } catch ArticleGenError.noArticle {
+            // 期望
+        } catch {
+            XCTFail("应为 noArticle，实际 \(error)")
+        }
+    }
+
+    /// 空主题（词驱动）：普通模型 generatePrompt 同样不绑定主题。
+    func testGeneratePromptEmptyThemeIsWordDriven() {
+        let p = LocalLLMGenerator.generatePrompt(theme: "", words: ["abandon"], maxWords: 100)
+        XCTAssertTrue(p.contains("words themselves shape the topic"))
+        XCTAssertFalse(p.contains("about: general"))
+    }
+
+    /// 空主题（词驱动）：策略 prompt 指导选 plan-embed（词即主题，无需先写后改写）。
+    func testStrategyPromptEmptyThemeGuidesPlanEmbed() {
+        let p = GenStrategyPrompt.strategyPrompt(theme: "", words: ["abandon", "battle"])
+        XCTAssertTrue(p.contains("(none — the target words ARE the topic)"))
+        XCTAssertTrue(p.contains("always choose \"plan-embed\""))
+    }
+
+    /// 空主题（词驱动）：generate-rewrite 的草稿阶段让模型自由选材。
+    func testPlainPromptEmptyThemeFreeChoice() {
+        let p = GenStrategyPrompt.plainPrompt(theme: "", maxWords: 100)
+        XCTAssertTrue(p.contains("topic of your choice"))
     }
 
 }

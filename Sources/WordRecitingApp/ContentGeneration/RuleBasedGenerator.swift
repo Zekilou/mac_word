@@ -15,7 +15,15 @@ struct RuleBasedGenerator: ContentGenerator {
         constraints: GenerationConstraints,
         graph: GraphQueries
     ) async throws -> GeneratedArticle {
-        guard mode == .rewrite, let sourceText, !sourceText.isEmpty else {
+        // 造文模式：sourceText 作为主题；规则模板快速造文。
+        if mode == .generate {
+            return try generateArticle(
+                topic: sourceText,
+                targetLemmas: targetLemmas,
+                constraints: constraints,
+                graph: graph)
+        }
+        guard let sourceText, !sourceText.isEmpty else {
             return GeneratedArticle(
                 body: sourceText ?? "", spans: [],
                 generatorId: Self.identifier, tier: Self.tier)
@@ -119,7 +127,13 @@ struct RuleBasedGenerator: ContentGenerator {
         for syn in syns {
             if targets.contains(syn.lemmaId) {
                 let raw = syn.surfaceForm ?? lower
-                let adjusted = Self.applyCase(original: word, replacement: raw)
+                // 清洗尾巴：Anki 清洗后可能仍残留 "[音标]" / "(词性)" 等，
+                // 替换用的表面形式只取连续字母 + - + ' 前缀，保证是干净单词。
+                let plain = raw.prefix { ch in
+                    ch.isLetter || ch == "-" || ch == "'"
+                }
+                let replacement = plain.isEmpty ? raw : String(plain)
+                let adjusted = Self.applyCase(original: word, replacement: replacement)
                 return WordResult(
                     surfaceForm: adjusted, lemmaId: syn.lemmaId, replacedFrom: word,
                     weight: syn.weight, sourceType: syn.sourceType)

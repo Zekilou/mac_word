@@ -115,6 +115,13 @@ enum EmbeddingVerification: String, CaseIterable, Identifiable, Codable, Sendabl
         case .strict: return "严格（云端/大模型）"
         }
     }
+    var help: String {
+        switch self {
+        case .light: return "逐词融入后只查词在不在，不调 LLM 验证语义（少调用，适合本地慢速小模型）"
+        case .standard: return "首次验证语义保真（多一次小调用），后续按存在性规则检查"
+        case .strict: return "每个词融入后都调 LLM 验证语义，最稳但调用最多（适合云端 API / 大模型）"
+        }
+    }
 }
 
 // MARK: - GenerationConstraints
@@ -138,6 +145,33 @@ enum GeneratorTier: String, Sendable, Codable, CaseIterable, Identifiable {
     case processLocal = "进程内本地"
     case remote = "远端 LLM"
     var id: String { rawValue }
+}
+
+// MARK: - LlamaServerLifecycle（本地 agent 增强进程生命周期）
+
+/// llama-server 进程生命周期策略（仅 useLocalAgentEnhancement 启用时生效）。
+/// @ai: 进程内本地档（.processLocal）启用「本地 agent 增强」后，spawn llama-server
+///      监听 localhost:port 供 sidecar 调用；此枚举决定 spawn/stop 时机。
+enum LlamaServerLifecycle: String, Sendable, Codable, CaseIterable, Identifiable {
+    /// 常驻：App 启动时 spawn，App 退出时 stop。生成零启动延迟，模型常驻内存。
+    case persistent = "persistent"
+    /// 按生成启停：每次生成 spawn，生成完成 stop。启动延迟约 1-3s，内存按需释放。
+    case perGenerate = "perGenerate"
+    /// 闲置超时停：首次生成 spawn，闲置 N 分钟自动 stop，再次生成重新 spawn。平衡启动延迟与内存。
+    case idleTimeout = "idleTimeout"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .persistent: return "常驻（启动即加载，零延迟）"
+        case .perGenerate: return "按生成启停（省内存，启动延迟）"
+        case .idleTimeout: return "闲置超时停（平衡）"
+        }
+    }
+
+    /// 闲置超时秒数（仅 .idleTimeout 生效）。
+    static let idleTimeoutSeconds: TimeInterval = 300
 }
 
 // MARK: - RemoteProvider（远端服务类型）

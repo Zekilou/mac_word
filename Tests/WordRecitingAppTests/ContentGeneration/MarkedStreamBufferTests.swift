@@ -57,4 +57,36 @@ final class MarkedStreamBufferTests: XCTestCase {
         XCTAssertEqual(b.rawAll, "===ARTICLE_START===Hi. Bye.===ARTICLE_END===")
         XCTAssertEqual(b.body, "Hi. Bye.")
     }
+
+    // MARK: - 实时前导垃圾守卫（LeadingLineGuard）
+
+    func testGuardEmitsNormalContentImmediately() {
+        var g = LeadingLineGuard()
+        XCTAssertEqual(g.append("A good writer must master"), "A good writer must master",
+                       "普通正文应立即放行")
+        XCTAssertEqual(g.append(" style."), " style.")
+    }
+
+    func testGuardDropsLeadingOutlineLines() {
+        var g = LeadingLineGuard()
+        XCTAssertEqual(g.append("- Paragraph 1: The craft of writing.\n"), "",
+                       "大纲行应被扣留并丢弃")
+        XCTAssertEqual(g.append("- Paragraph 2: Body ideas\n\n"), "",
+                       "后续大纲行与空行也应丢弃")
+        XCTAssertEqual(g.append("A real article begins here.\n"), "A real article begins here.\n",
+                       "正文开始后放行")
+    }
+
+    func testGuardDropsMetaPreambleLine() {
+        var g = LeadingLineGuard()
+        XCTAssertEqual(g.append("I'm not sure whether my draft is ready.\n"), "",
+                       "任务元句应被丢弃")
+        XCTAssertEqual(g.append("Here is the article.\n"), "Here is the article.\n")
+    }
+
+    func testGuardKeepsBulletContent() {
+        var g = LeadingLineGuard()
+        XCTAssertEqual(g.append("- This is a bullet point.\n"), "- This is a bullet point.\n",
+                       "bullet 内容行（非大纲）应保留")
+    }
 }

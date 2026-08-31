@@ -19,13 +19,29 @@ extension LocalLLMGenerator {
             message: "正在生成正文…", detail: nil, status: .running)))
         try Task.checkCancellation()
         let draftBox = StreamBufferBox()
+        let draftGuard = LeadingLineGuardBox()
+        let draftThinkBox = ThinkingLineExtractorBox()
+        let draftBudget = bodyMaxTokens(maxWords: maxWords)
+        let draftPrompt = compressContext(
+            GenStrategyPrompt.plainPrompt(theme: theme, maxWords: maxWords),
+            reservedForOutput: draftBudget, protectedPrefix: Self.hardRules)
         _ = try await client.stream(
-            prompt: GenStrategyPrompt.plainPrompt(theme: theme, maxWords: maxWords),
-            maxTokens: maxTokens, temperature: temperature
+            prompt: draftPrompt, maxTokens: draftBudget, temperature: temperature
         ) { [onProgress] token in
-            let clean = draftBox.buffer.append(token)
-            if !clean.isEmpty { onProgress?(.token(clean)) }
+            let (vis, thoughts) = draftThinkBox.extractor.append(token)
+            for t in thoughts {
+                draftThinkBox.seq += 1
+                onProgress?(.thought(GenThought(
+                    id: "model-\(draftThinkBox.seq)", kind: .info,
+                    message: "模型：\(t)", detail: nil, status: .running)))
+            }
+            guard !vis.isEmpty else { return }
+            let clean = draftBox.buffer.append(vis)
+            let visible = draftGuard.guardValue.append(clean)
+            if !visible.isEmpty { onProgress?(.token(AgenticPrompts.strippingMarkerLines(visible))) }
         }
+        // 流结束：冲洗思考行提取器尾部（单行/无换行结尾不会被滞留丢失）
+        flushThinkingStream(thinkBox: draftThinkBox, buffer: draftBox, guardBox: draftGuard, onProgress: onProgress)
         var body = AgenticPrompts.extractMarkedBody(draftBox.buffer.rawAll)
         onProgress?(.thought(GenThought(
             id: "draft", kind: .generating,
@@ -38,12 +54,17 @@ extension LocalLLMGenerator {
             if sentences.isEmpty {
                 skipped = words.map { SkippedWord(word: $0, reason: "草稿为空或无法断句") }
             } else {
-                // 3. 联想 + 锚点（一次调用）
+                // 3. 联想 + 锚点（一次调用；embedding 可用时优先语义选锚）
                 onProgress?(.stage(.embedding))
                 onProgress?(.thought(GenThought(
                     id: "anchor", kind: .planning,
                     message: "正在联想并匹配锚点句…", detail: nil, status: .running)))
-                let anchors = await resolveAnchors(words: words, sentences: sentences)
+                let wordLemmaMap = surfaces.reduce(into: [String: EntityID]()) { acc, kv in
+                    acc[kv.value] = kv.key
+                }
+                let anchors = await resolveAnchors(
+                    words: words, sentences: sentences,
+                    wordLemmaMap: wordLemmaMap, graph: graph)
                 onProgress?(.thought(GenThought(
                     id: "anchor", kind: .planning,
                     message: "锚点匹配完成（\(anchors.count) 词）", detail: nil, status: .done)))
@@ -80,6 +101,26 @@ extension LocalLLMGenerator {
                     id: "smooth", kind: .polishing,
                     message: "衔接润色完成（\(replacements.count) 处）", detail: nil, status: .done)))
                 body = Self.cleanArticle(finalSentences.joined(separator: " "))
+
+                // 7. 整体自查（防写作过程自述/离题/劣化残留；complete 静默，失败保留原文）
+                if !body.isEmpty {
+                    onProgress?(.thought(GenThought(
+                        id: "polish", kind: .polishing,
+                        message: "正在整体润色…", detail: nil, status: .running)))
+                    try Task.checkCancellation()
+                    let polishBudget = bodyMaxTokens(maxWords: maxWords)
+                    let polishPrompt = compressContext(
+                        Self.polishPrompt(article: body), reservedForOutput: polishBudget,
+                        protectedPrefix: Self.reviewInstructions)
+                    if let polished = try? await client.complete(
+                        prompt: polishPrompt, maxTokens: polishBudget, temperature: 0.3) {
+                        let cleaned = AgenticPrompts.extractMarkedBody(polished)
+                        if !cleaned.isEmpty { body = cleaned }
+                    }
+                    onProgress?(.thought(GenThought(
+                        id: "polish", kind: .polishing,
+                        message: "润色完成", detail: nil, status: .done)))
+                }
             }
         }
 
@@ -88,9 +129,31 @@ extension LocalLLMGenerator {
             skipped: skipped, strategy: strategy, constraints: constraints, graph: graph)
     }
 
-    /// 联想 + 锚点选句：草稿短 → 一次 LLM 选句；草稿长 → 联想(短) + 本地词面匹配。
+    /// 联想 + 锚点选句：embedding 可用时优先语义余弦选锚（RAG 按需查询，阈值以下 skip）；
+    /// 否则回退——草稿短 → 一次 LLM 选句；草稿长 → 联想(短) + 本地词面匹配。
     /// @ai: 带全文的 prompt 有 token 预算保护（本地模型上下文窗口小）；标 internal 便于测试。
-    func resolveAnchors(words: [String], sentences: [String]) async -> [AnchorAssignment] {
+    func resolveAnchors(
+        words: [String], sentences: [String],
+        wordLemmaMap: [String: EntityID], graph: GraphQueries
+    ) async -> [AnchorAssignment] {
+        // embedding 语义选锚（优先）：词库数据合成词向量 + 句子平均向量 → 余弦选最高分句
+        if let provider = embeddingProvider {
+            let composer = SemanticAnchorComposer(
+                provider: provider, llm: client, graph: graph)
+            let matcher = EmbeddingAnchorMatcher(composer: composer, provider: provider)
+            let matches = await matcher.match(words: wordLemmaMap, sentences: sentences)
+            // 只保留阈值以上的锚点（低于阈值 = 融不进去 → skip，不硬塞）
+            let usable = matcher.deconflict(matches)
+            let anchors = usable.compactMap { m -> AnchorAssignment? in
+                guard m.sentenceIndex >= 0 else { return nil }
+                // associations 用词库同义词（供改写参考，可选）
+                let associations = synonymAssociations(for: m.word, lemmaId: wordLemmaMap[m.word], graph: graph)
+                return AnchorAssignment(
+                    word: m.word, sentenceIndex: m.sentenceIndex, associations: associations)
+            }
+            if !anchors.isEmpty { return anchors }
+        }
+        // 回退：LLM 联想 + 锚点选句
         let draft = sentences.joined(separator: " ")
         if Self.estimateTokens(draft) <= Self.anchorTokenBudget {
             let prompt = AgenticPrompts.anchorPrompt(sentences: sentences, words: words)
@@ -109,6 +172,17 @@ extension LocalLLMGenerator {
 
     /// 锚点选句 prompt 的全文 token 预算（本地模型上下文保护；超限走本地匹配）。
     static let anchorTokenBudget = 900
+
+    /// 从词库取目标词的 maps_to 同义词（逗号分隔），作为改写参考 associations。
+    /// @ai: 复用现有词库数据，避免再调 LLM 联想；无同义词返回空串。
+    private func synonymAssociations(for word: String, lemmaId: EntityID?, graph: GraphQueries) -> String {
+        guard let lemmaId else { return "" }
+        guard let detail = try? graph.lemmaDetail(lemmaId) else { return "" }
+        let synonyms = detail.synonyms
+            .compactMap(\.surfaceForm)
+            .filter { !$0.isEmpty && $0.lowercased() != word.lowercased() }
+        return synonyms.isEmpty ? "" : synonyms.joined(separator: ", ")
+    }
 
     /// 粗略 token 估算（英文约 4 字符/token）。
     static func estimateTokens(_ text: String) -> Int {
@@ -218,6 +292,10 @@ extension LocalLLMGenerator {
 
         // 最终正文兜底：容错剥离标记（防变体标记漏进展示）
         finalBody = AgenticPrompts.extractMarkedBody(finalBody)
+        // 最终校验：无正文（空 / 整篇写作自述）→ 生成失败，不落库
+        guard !Self.isNoArticle(finalBody) else {
+            throw ArticleGenError.noArticle
+        }
 
         return GeneratedArticle(
             body: finalBody,

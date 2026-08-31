@@ -1,0 +1,95 @@
+import Foundation
+
+/// WordNormalizer：词形归一化工具。
+/// 用途：
+///  - Lemma 全库唯一 key（归一化词形）：battles / battle / battled → "battle"
+///  - 剥离 Anki headword 音标 / 词性尾巴：abandon[ə'bændən] → "abandon"
+/// 纯规则后缀剥离，不做词典级屈折还原（WordNet 精确还原属第 2 期）。
+/// @ai: 仅纯词形变化归并到同一 Lemma；独立词条（abandon 动词 vs abandoned 形容词）各自独立。
+enum WordNormalizer {
+
+    /// 归一化为 Lemma key：清洗 → 小写 → 规则后缀剥离。
+    /// 返回空字符串表示无有效词形（调用方应跳过）。
+    static func normalize(_ word: String) -> String {
+        let cleaned = clean(word)
+        guard !cleaned.isEmpty else { return "" }
+        // 含空格（短语 / 词组）不剥离后缀，直接返回。
+        if cleaned.contains(" ") { return cleaned }
+        return stripSuffixes(cleaned.lowercased())
+    }
+
+    /// 清洗：剥离 [音标] 尾巴；空格后的词性/简短标记（v. / (n) / adj. 等）只取主词；
+    /// 其余保留（词组如 "take up" 原样返回）。
+    static func clean(_ word: String) -> String {
+        let trimmed = word.trimmingCharacters(in: .whitespaces)
+        // 剥离 [音标] 尾巴（保留空子序列："[音标]" → 首段为 ""）
+        let core = trimmed.split(separator: "[", maxSplits: 1,
+                                 omittingEmptySubsequences: false)
+            .first.map(String.init) ?? trimmed
+        let parts = core.split(separator: " ").map(String.init)
+        // 空格后为词性/简短标记 → 只取主词部分
+        if parts.count > 1, let last = parts.last,
+           Self.isPosMark(String(last.lowercased())) {
+            return parts.dropLast().joined(separator: " ")
+        }
+        return parts.joined(separator: " ")
+    }
+
+    /// 常见词性 / 简短标记（去符号后比对，如 "(v.)" → "v"）。
+    private static func isPosMark(_ token: String) -> Bool {
+        let letters = token.filter(\.isLetter)
+        guard !letters.isEmpty else { return false }
+        return ["v", "n", "adj", "adv", "prep", "conj", "int", "pron",
+                "vt", "vi", "a", "ad", "abbr", "phr", "num"].contains(letters)
+    }
+
+    // MARK: - 规则后缀剥离（小写输入）
+
+    /// 保守剥离：剩余长度 < 阈值不剥；双写辅音收尾去一个（running → run）。
+    /// @ai: 阈值防误伤高频词：-s 需剩 >4（防 this/was/his）、-ed 需剩 >5（防 speed/need）、
+    /// -ly 需剩 >6（防 reply/family）；**不做 -er/-est 剥离**（weather/water/paper 误伤率高，
+    /// 比较级词形作为独立 lemma 处理，第 2 期 WordNet 精确还原）。
+    private static func stripSuffixes(_ lower: String) -> String {
+        // ies → y（studies → study，studied → study）
+        if lower.count > 4, lower.hasSuffix("ies") {
+            return String(lower.dropLast(3)) + "y"
+        }
+        if lower.count > 4, lower.hasSuffix("ied") {
+            return String(lower.dropLast(3)) + "y"
+        }
+        // es：仅当词干以 s / x / z / ch / sh 结尾（boxes → box, watches → watch, glasses → glass）
+        if lower.count > 4, lower.hasSuffix("es") {
+            let stem = String(lower.dropLast(2))
+            let isEsStem = stem.hasSuffix("s") || stem.hasSuffix("x")
+                || stem.hasSuffix("z") || stem.hasSuffix("ch") || stem.hasSuffix("sh")
+            if isEsStem { return stem }
+        }
+        // s → ""（battles → battle, books → book）；防 this(4)/was(3)/his(3)
+        if lower.count > 4, lower.hasSuffix("s") {
+            return String(lower.dropLast(1))
+        }
+        // ing → ""（reading → read, running → run）；thing/sing/bring 长度 ≤5 不剥
+        if lower.count > 5, lower.hasSuffix("ing") {
+            return collapseDouble(String(lower.dropLast(3)))
+        }
+        // ed → ""（walked → walk, stopped → stop）；防 speed(5)/need(4)/red(3)
+        if lower.count > 5, lower.hasSuffix("ed") {
+            return collapseDouble(String(lower.dropLast(2)))
+        }
+        // ly → ""（quickly → quick）；防 reply(5)/family(6)/apply(5)
+        if lower.count > 6, lower.hasSuffix("ly") {
+            return String(lower.dropLast(2))
+        }
+        return lower
+    }
+
+    /// 双写辅音收尾则去掉一个：runn → run, stopp → stop, bigg → big。
+    private static func collapseDouble(_ s: String) -> String {
+        guard s.count > 3 else { return s }
+        let chars = Array(s)
+        if chars[chars.count - 1] == chars[chars.count - 2] {
+            return String(chars.dropLast())
+        }
+        return s
+    }
+}

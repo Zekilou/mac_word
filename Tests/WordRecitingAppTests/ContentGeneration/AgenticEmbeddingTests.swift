@@ -24,6 +24,10 @@ private final class CallCounterBox: @unchecked Sendable {
     func next() -> Int { value += 1; return value }
 }
 
+private final class TokenBox: @unchecked Sendable {
+    var value = ""
+}
+
 /// Agentic 逐词融入：类型与管线测试（全部 mock，不跑真实模型）。
 final class AgenticEmbeddingTests: XCTestCase {
 
@@ -283,7 +287,7 @@ final class AgenticEmbeddingTests: XCTestCase {
 
         let client = SeqClient(responses: [
             "STRATEGY: generate-rewrite\nWINDOW: sentence\nFALLBACK: skip",
-            "=== ARTICLE_START ===\nA normal article about daily life. People wake up, work, and rest each day.\n=== ARTICLE_END ===",
+            "=== ARTICLE_START ===\n- Paragraph 1: Intro\n- Paragraph 2: Body\n\nA normal article about daily life. People wake up, work, and rest each day.\n=== ARTICLE_END ===",
             "{\"abandon\": {\"index\": 0, \"associations\": \"x\"}, \"battle\": {\"index\": 1, \"associations\": \"y\"}}",
             "We should never abandon our dreams.",
             "Yes.",
@@ -292,7 +296,10 @@ final class AgenticEmbeddingTests: XCTestCase {
             "We should never abandon our dreams.\nThe battle continues every day.",
             "We should never abandon our dreams.\nThe battle continues every day.",
         ])
-        let gen = LocalLLMGenerator(client: client)
+        let tokenBox = TokenBox()
+        let gen = LocalLLMGenerator(client: client, onProgress: { progress in
+            if case .token(let text) = progress { tokenBox.value += text }
+        })
         let article = try await gen.generate(
             mode: .generate, sourceText: "科技", targetLemmas: ids,
             constraints: GenerationConstraints(), graph: graph)
@@ -300,6 +307,10 @@ final class AgenticEmbeddingTests: XCTestCase {
         XCTAssertFalse(article.body.contains("ARTICLE_START"), "变体开标记不应残留: \(article.body)")
         XCTAssertFalse(article.body.contains("ARTICLE_END"), "变体结束标记不应残留: \(article.body)")
         XCTAssertFalse(article.body.contains("<article"), "尖括号变体不应残留")
+        XCTAssertFalse(article.body.contains("Paragraph"), "大纲回显不应残留: \(article.body)")
+        // 实时流 token 也应干净（守卫在流式过程中剥离标记/大纲，非仅结尾）
+        XCTAssertFalse(tokenBox.value.contains("ARTICLE_START"), "实时流不应出现标记")
+        XCTAssertFalse(tokenBox.value.contains("Paragraph"), "实时流不应出现大纲回显")
         XCTAssertTrue(article.body.lowercased().contains("abandon"), "正文: \(article.body)")
         XCTAssertTrue(article.body.lowercased().contains("battle"), "正文: \(article.body)")
         let spanLemmas = Set(article.spans.compactMap { $0.lemmaId })
@@ -333,13 +344,14 @@ final class AgenticEmbeddingTests: XCTestCase {
 
         let box = PromptListBox()
         // abandon 三次改写失败（无词）；used={0,1} 无空闲锚点 → 直接跳过
-        // battle 成功；回填后衔接润色（句1）；最后跳过词结构化报告
+        // battle 成功；回填后衔接润色（句1）；最后整体自查；最后跳过词结构化报告
         // 调用序列：
         // 1 策略 2 草稿 3 锚点
         // 4-6 abandon 改写(缺词×3)
         // 7 battle 改写 8 battle 验证
         // 9 句1 衔接润色
-        // 10 跳过报告
+        // 10 整体自查
+        // 11 跳过报告
         let client = SeqClient(responses: [
             "STRATEGY: generate-rewrite\nWINDOW: whole\nFALLBACK: retry",
             "A normal article about daily life. People wake up, work, and rest each day.",
@@ -350,6 +362,7 @@ final class AgenticEmbeddingTests: XCTestCase {
             "The battle continues every day.",
             "Yes.",
             "A normal article about daily life.\nThe battle continues every day.",  // 句1 衔接
+            "A normal article about daily life. The battle continues every day.",   // 整体自查
             "[{\"word\": \"abandon\", \"reason\": \"no natural fit\"}]",
         ], onPrompt: { box.values.append($0) })
         let gen = LocalLLMGenerator(client: client)
@@ -364,7 +377,9 @@ final class AgenticEmbeddingTests: XCTestCase {
         XCTAssertTrue(spanLemmas.contains(ids[1]))
         XCTAssertFalse(spanLemmas.contains(ids[0]), "跳过的词不应命中 span")
         XCTAssertTrue(box.values[8].contains("consecutive sentences"), "回填后应衔接润色")
-        XCTAssertTrue(box.values[9].contains("JSON"), "应调用跳过报告 prompt")
+        XCTAssertTrue(box.values[9].contains("Review the English article below"),
+                      "衔接后应整体自查：\(box.values[9].prefix(80))")
+        XCTAssertTrue(box.values[10].contains("JSON"), "应调用跳过报告 prompt")
     }
 
     /// 长草稿（估算 > 预算）→ 不调用带全文的锚点 prompt，走联想(短) + 本地词面匹配。
@@ -381,7 +396,12 @@ final class AgenticEmbeddingTests: XCTestCase {
             "{\"abandon\": \"give up, leave, desert\", \"battle\": \"fight, effort, struggle\"}",
         ], onPrompt: { box.values.append($0) })
         let gen = LocalLLMGenerator(client: client)
-        let anchors = await gen.resolveAnchors(words: ["abandon", "battle"], sentences: longSentences)
+        let appDB = try AppDatabase.inMemory()
+        let world = World(database: appDB)
+        let anchors = await gen.resolveAnchors(
+            words: ["abandon", "battle"], sentences: longSentences,
+            wordLemmaMap: ["abandon": "l1", "battle": "l2"],
+            graph: world.graph)
         XCTAssertEqual(anchors.count, 2)
         XCTAssertTrue(anchors.allSatisfy {
             $0.sentenceIndex >= 0 && $0.sentenceIndex < longSentences.count

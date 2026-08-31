@@ -103,4 +103,38 @@ final class MigrationsTests: XCTestCase {
             XCTAssertEqual(pk, "entity_id", "\(table) should have entity_id as PK")
         }
     }
+
+    // v2 值域迁移：旧 0=不会/1=会 → 新 0=无记录/1=不会/2=会（线性 +1）
+    func testMasteryScaleMigrationMapping() throws {
+        let appDB = try makeDB()
+        try appDB.dbWriter.write { db in
+            for id in ["n0", "n1", "n05", "n15"] {
+                try db.execute(
+                    sql: "INSERT INTO nodes (id, kind, created_at) VALUES (?, 'lemma', ?)",
+                    arguments: [id, Date()])
+            }
+            // 旧值域数据：0 = 不会、1 = 会、0.5 = 半会；1.5 模拟已按新值域写入（不应被改动）
+            let rows: [(String, Double)] = [("n0", 0.0), ("n1", 1.0), ("n05", 0.5), ("n15", 1.5)]
+            for (id, m) in rows {
+                try db.execute(
+                    sql: "INSERT INTO comp_user_known (entity_id, mastery, source, updated_at) VALUES (?, ?, 'legacy', ?)",
+                    arguments: [id, m, Date()])
+            }
+            // 与 SchemaMigrator v2_user_known_scale 相同的 UPDATE
+            try db.execute(sql: """
+                UPDATE comp_user_known
+                SET mastery = mastery + 1
+                WHERE mastery >= 0 AND mastery <= 1
+                """)
+        }
+        let values = try appDB.dbWriter.read { db in
+            try Dictionary(uniqueKeysWithValues: Row.fetchAll(
+                db, sql: "SELECT entity_id, mastery FROM comp_user_known")
+                .map { ($0["entity_id"] as String, $0["mastery"] as Double) })
+        }
+        XCTAssertEqual(values["n0"], 1.0, "旧 0(不会) → 新 1")
+        XCTAssertEqual(values["n1"], 2.0, "旧 1(会) → 新 2")
+        XCTAssertEqual(values["n05"] ?? -1, 1.5, accuracy: 0.001, "旧 0.5(半会) → 新 1.5")
+        XCTAssertEqual(values["n15"], 1.5, "新值域数据不受影响")
+    }
 }

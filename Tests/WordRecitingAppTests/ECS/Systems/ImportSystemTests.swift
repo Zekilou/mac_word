@@ -6,11 +6,13 @@ final class ImportSystemTests: XCTestCase {
 
     private var appDB: AppDatabase!
     private var world: World!
+    private var graph: GraphQueries!
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
 
     override func setUpWithError() throws {
         appDB = try AppDatabase.inMemory()
         world = World(database: appDB)
+        graph = world.graph
     }
 
     private func count(_ sql: String, _ args: StatementArguments = []) throws -> Int {
@@ -126,13 +128,82 @@ final class ImportSystemTests: XCTestCase {
     // MARK: - 空壳 System 可被 World.run 调用
 
     func testShellSystemsAreCallable() throws {
-        // Study/Analytics 空壳应可被 World.run 调用且不抛错；
-        // ContentGenSystem 已实现，用空文章验证可调用。
-        try world.run(StudySystem(), context: ())
+        // ContentGenSystem 已实现，用空文章验证可调用；
+        // AnalyticsSystem 空壳应可被 World.run 调用且不抛错。
         let emptyArticle = GeneratedArticle(
             body: "", spans: [], generatorId: "test", tier: .fast)
         try world.run(ContentGenSystem(), context: ContentGenContext(
             article: emptyArticle, targetLemmas: [], sourceText: nil, topic: nil))
         try world.run(AnalyticsSystem(), context: ())
+    }
+
+    // MARK: - Lemma 去重
+
+    /// 构造含 lemma 的 batch（模拟 CSVImporter：lemma node id = lemma-<deck>-<i>）。
+    private func makeLemmaBatch(deckId: String, words: [(String, String)]) -> ImportBatch {
+        var nodes: [ImportBatch.NodeSpec] = [.init(id: deckId, kind: .deck, createdAt: now)]
+        var texts: [TextComponent] = []
+        var lemmaMetas: [LemmaMetaComponent] = []
+        var scheds: [ScheduleStateComponent] = []
+        var edges: [ImportBatch.EdgeSpec] = []
+        for (i, w) in words.enumerated() {
+            let lemmaId = "lemma-\(deckId)-\(i)"
+            let cardId = "card-\(deckId)-\(i)"
+            nodes.append(.init(id: lemmaId, kind: .lemma, createdAt: now))
+            texts.append(TextComponent(entityId: lemmaId, textA: w.0, textB: w.1, language: nil))
+            lemmaMetas.append(LemmaMetaComponent(
+                entityId: lemmaId, pos: "v", phoneticUs: nil,
+                phoneticUk: nil, sensesJson: nil))
+            nodes.append(.init(id: cardId, kind: .card, createdAt: now))
+            scheds.append(CSVImporter.makeInitialSchedule(entityId: cardId, now: now))
+            edges.append(.init(id: "has-lemma-\(cardId)", srcId: deckId,
+                               dstId: lemmaId, rel: .has, createdAt: now))
+            edges.append(.init(id: "has-card-\(cardId)", srcId: deckId,
+                               dstId: cardId, rel: .has, createdAt: now))
+            edges.append(.init(id: "inst-\(cardId)", srcId: cardId,
+                               dstId: lemmaId, rel: .instantiates, createdAt: now))
+        }
+        return ImportBatch(
+            deckId: deckId, nodes: nodes, textComponents: texts,
+            deckMetas: [DeckMetaComponent(entityId: deckId, name: deckId,
+                                          sourceKind: "csv", sourcePath: nil, importedAt: now)],
+            lemmaMetas: lemmaMetas, scheduleStates: scheds,
+            edges: edges, failures: [])
+    }
+
+    /// 跨词包重复词：复用同一 Lemma，卡片各自指向它，释义多来源合并。
+    func testSameLemmaAcrossDecksReused() throws {
+        try world.run(ImportSystem(), context: makeLemmaBatch(
+            deckId: "deck-1", words: [("abandon", "放弃")]))
+        try world.run(ImportSystem(), context: makeLemmaBatch(
+            deckId: "deck-2", words: [("abandon", "舍弃")]))
+
+        // 只 1 个 Lemma（复用），2 个 card
+        XCTAssertEqual(try count("SELECT COUNT(*) FROM nodes WHERE kind = 'lemma'"), 1)
+        XCTAssertEqual(try count("SELECT COUNT(*) FROM nodes WHERE kind = 'card'"), 2)
+        // 实际 lemma = 批内首个保留的原 id（方案 B），第二个词包复用
+        let lemmaId = try XCTUnwrap(graph.findLemmaId(byTextA: "abandon"))
+        XCTAssertEqual(lemmaId, "lemma-deck-1-0")
+        // 两个 card 的 instantiates 边都指向同一 Lemma
+        XCTAssertEqual(try count(
+            "SELECT COUNT(*) FROM edges WHERE rel_type = 'instantiates' AND dst_id = ?",
+            [lemmaId]), 2)
+        // 释义合并：两个来源各一条，不覆盖
+        let defs = try graph.lemmaDefinitions(lemmaId: lemmaId)
+        XCTAssertEqual(defs.count, 2)
+        XCTAssertEqual(Set(defs.map(\.source)), ["deck:deck-1", "deck:deck-2"])
+        XCTAssertEqual(Set(defs.map(\.definition)), ["放弃", "舍弃"])
+    }
+
+    /// 批次内变体归一：battle 与 battles 合并为同一 Lemma。
+    func testVariantLemmasMergedWithinBatch() throws {
+        try world.run(ImportSystem(), context: makeLemmaBatch(
+            deckId: "deck-1", words: [("battle", "a"), ("battles", "b")]))
+
+        XCTAssertEqual(try count("SELECT COUNT(*) FROM nodes WHERE kind = 'lemma'"), 1)
+        let lemmaId = try XCTUnwrap(graph.findLemmaId(byTextA: "battle"))
+        XCTAssertEqual(try count(
+            "SELECT COUNT(*) FROM edges WHERE rel_type = 'instantiates' AND dst_id = ?",
+            [lemmaId]), 2)
     }
 }

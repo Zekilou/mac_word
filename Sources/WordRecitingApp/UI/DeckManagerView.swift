@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// 词库管理视图：Deck 列表 + 导入按钮。
+/// 词库管理视图：Deck 列表 + 导入按钮 + 系统词典入口。
 /// @ai: 严格贴合 user_profile：紧凑 UI、重要按钮在显眼位置。
 struct DeckManagerView: View {
     let world: World
@@ -23,6 +23,21 @@ struct DeckManagerView: View {
     }
 
     private func content(vm: DeckManagerViewModel) -> some View {
+        NavigationStack {
+            deckList(vm)
+                .navigationDestination(for: DeckSummary.self) { deck in
+                    CardBrowserView(
+                        world: world,
+                        deckId: deck.id,
+                        deckName: deck.name)
+                }
+                .navigationDestination(for: SystemDictionaryRoute.self) { _ in
+                    SystemDictionaryView(world: world)
+                }
+        }
+    }
+
+    private func deckList(_ vm: DeckManagerViewModel) -> some View {
         VStack(spacing: 0) {
             // 工具栏：导入按钮
             HStack {
@@ -52,23 +67,37 @@ struct DeckManagerView: View {
 
             Divider()
 
-            // Deck 列表
+            // 系统词典入口（懒加载数据源，始终显示）+ Deck 列表
             if vm.decks.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "tray")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.tertiary)
-                    Text("尚未导入任何词库").foregroundStyle(.secondary)
-                    Text("点击上方「导入词库」按钮选择 .apkg 或 .csv 文件")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                VStack(spacing: 0) {
+                    NavigationLink(value: SystemDictionaryRoute()) {
+                        dictionaryRow
+                    }
+                    VStack(spacing: 12) {
+                        Image(systemName: "tray")
+                            .font(.system(size: 40))
+                            .foregroundStyle(.tertiary)
+                        Text("尚未导入任何词库").foregroundStyle(.secondary)
+                        Text("点击上方「导入词库」按钮选择 .apkg 或 .csv 文件")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(vm.decks) { deck in
-                    deckRow(deck)
+                // @ai: 不用 List（NSTableView），避免 macOS 27 FocusBridge 布局时 key view loop 崩溃
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        NavigationLink(value: SystemDictionaryRoute()) {
+                            dictionaryRow
+                        }
+                        ForEach(vm.decks) { deck in
+                            NavigationLink(value: deck) {
+                                deckRow(deck)
+                            }
+                        }
+                    }
                 }
-                .listStyle(.inset)
             }
         }
         .fileImporter(
@@ -79,11 +108,7 @@ struct DeckManagerView: View {
             switch result {
             case .success(let urls):
                 if let url = urls.first {
-                    Task {
-                        let accessed = url.startAccessingSecurityScopedResource()
-                        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-                        await vm.importFile(at: url)
-                    }
+                    vm.importFile(at: url)
                 }
             case .failure(let error):
                 vm.errorMessage = "文件选择失败：\(error)"
@@ -112,6 +137,26 @@ struct DeckManagerView: View {
         .padding(.vertical, 4)
     }
 
+    /// 系统词典入口行：懒加载数据源（macOS 内置，按词查询英英释义）。
+    private var dictionaryRow: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "character.book.closed")
+                .font(.title3)
+                .foregroundStyle(.tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("系统词典").fontWeight(.medium)
+                Text("macOS 内置 · 英英 · 按词查询（懒加载）")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 4)
+    }
+
     private func tagView(_ text: String) -> some View {
         Text(text.uppercased())
             .font(.caption2)
@@ -131,3 +176,6 @@ struct DeckManagerView: View {
             .background(color.opacity(0.08))
     }
 }
+
+/// 系统词典入口的导航路由（懒加载数据源，无 deckId）。
+struct SystemDictionaryRoute: Hashable {}

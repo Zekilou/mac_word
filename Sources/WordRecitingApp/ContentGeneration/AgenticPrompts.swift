@@ -203,20 +203,23 @@ enum AgenticPrompts {
 
     /// 提取两个标记之间的正文（容错：允许空格/换行/大小写/`<article>` 等变体）；无标记回退全量。
     /// @ai: 先归一化变体标记为规范形式（仅匹配被 =/<> 包裹的标记，不误伤正常短语），再按范围提取；
-    /// 开标记之前与结束标记之后的内容一律丢弃。
+    /// 开标记之前与结束标记之后的内容一律丢弃；最后剥离前导大纲回显。
     static func extractMarkedBody(_ raw: String) -> String {
         let normalized = normalizeMarkers(raw)
-        guard let start = normalized.range(of: articleStart) else {
-            return LocalLLMGenerator.cleanArticle(normalized)
-        }
-        let inner: String
-        if let endRange = normalized.range(of: articleEnd) {
-            inner = String(normalized[start.upperBound..<endRange.lowerBound])
+        let body: String
+        if let start = normalized.range(of: articleStart) {
+            if let endRange = normalized.range(of: articleEnd) {
+                body = String(normalized[start.upperBound..<endRange.lowerBound])
+            } else {
+                // 有开标记但结束标记缺失（半截正文）：取开标记之后的内容
+                body = String(normalized[start.upperBound...])
+            }
         } else {
-            // 有开标记但结束标记缺失（半截正文）：取开标记之后的内容
-            inner = String(normalized[start.upperBound...])
+            body = normalized
         }
-        let cleaned = LocalLLMGenerator.cleanArticle(inner)
+        // 剥离前导大纲/计划回显与任务元句（小模型常把写作计划/元评论输出进正文）
+        let stripped = stripLeadingJunk(body)
+        let cleaned = LocalLLMGenerator.cleanArticle(stripped)
         return cleaned.isEmpty ? LocalLLMGenerator.cleanArticle(normalized) : cleaned
     }
 
@@ -226,6 +229,72 @@ enum AgenticPrompts {
             .map(String.init)
             .filter { !isStartMarker(compactMarker($0)) && !isEndMarker(compactMarker($0)) }
             .joined(separator: "\n")
+    }
+
+    /// 剥离前导垃圾块：大纲/计划回显行 + 任务元句 + 前导空行，整块移除。
+    /// @ai: 只匹配结构明确的大纲行（Paragraph/Section/Part/Step + 编号 + 冒号）与少数任务元句，
+    /// 不枚举"释义的多种表述"；实时守卫与最终提取共用同一判定。
+    static func stripLeadingJunk(_ body: String) -> String {
+        let lines = body.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var start = 0
+        while start < lines.count {
+            let line = lines[start].trimmingCharacters(in: .whitespaces)
+            guard isJunkLeadingLine(line) else { break }
+            start += 1
+        }
+        guard start > 0 else { return body }
+        return lines[start...].joined(separator: "\n")
+    }
+
+    /// 完整行判定：空行 / 标记行 / 大纲行 / 任务元句。
+    static func isJunkLeadingLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty { return true }
+        let compact = compactMarker(trimmed)
+        if compact == "articlestart" || compact == "articleend" { return true }
+        if isOutlineLine(trimmed) { return true }
+        return isMetaPreambleLine(trimmed)
+    }
+
+    /// 部分行（尚未换行）是否可能构成垃圾开头：bullet/数字/大纲关键词/任务元句前缀。
+    /// @ai: 实时守卫用——普通正文开头立即放行，可疑开头扣留到整行再判定。
+    static func startsLikeJunk(_ partial: String) -> Bool {
+        let t = partial.trimmingCharacters(in: .whitespaces)
+        if t.isEmpty { return true }
+        let lower = t.lowercased()
+        if lower.hasPrefix("- ") || lower.hasPrefix("* ") || lower.hasPrefix("• ")
+            || lower.hasPrefix("1.") || lower.hasPrefix("2.") || lower.hasPrefix("3.")
+            || lower.hasPrefix("4.") || lower.hasPrefix("5.")
+            || lower.hasPrefix("paragraph") || lower.hasPrefix("section")
+            || lower.hasPrefix("part ") || lower.hasPrefix("step ") { return true }
+        return lower.hasPrefix("i'm not sure") || lower.hasPrefix("i am not sure")
+            || lower.hasPrefix("i'm having trouble") || lower.hasPrefix("i need help")
+            || lower.hasPrefix("i need some help") || lower.hasPrefix("here is my")
+            || lower.hasPrefix("here's my") || lower.hasPrefix("here’s my")
+            || lower.hasPrefix("my draft") || lower.hasPrefix("my article")
+            || lower.hasPrefix("as an ai") || lower.hasPrefix("sure, here")
+            || lower.hasPrefix("certainly, here")
+    }
+
+    /// 大纲行：以 Paragraph/Section/Part/Step + 编号 + 冒号/句号 开头（允许前置 bullet/数字）。
+    static func isOutlineLine(_ line: String) -> Bool {
+        guard let re = try? NSRegularExpression(
+            pattern: #"^(?:[-*•\d\.\s]*)(?:paragraph|section|part|step)\s*\w*\s*[:：.。]"#,
+            options: [.caseInsensitive]) else { return false }
+        let range = NSRange(line.startIndex..., in: line)
+        return re.firstMatch(in: line, options: [], range: range) != nil
+    }
+
+    /// 任务元句：模型自说自话的前缀（对草稿/任务本身的评论），狭窄枚举。
+    private static func isMetaPreambleLine(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        if lower.hasPrefix("i'm not sure") || lower.hasPrefix("i am not sure") { return true }
+        if lower.hasPrefix("i'm having trouble") { return true }
+        if lower.hasPrefix("i need help") || lower.hasPrefix("i need some help") { return true }
+        if lower.hasPrefix("here is my") || lower.hasPrefix("here's my") || lower.hasPrefix("here’s my") { return true }
+        if lower.hasPrefix("my draft") || lower.hasPrefix("my article") { return true }
+        if lower.hasPrefix("as an ai") || lower.hasPrefix("sure, here") || lower.hasPrefix("certainly, here") { return true }
+        return false
     }
 
     /// 归一化变体标记为规范形式（=== ARTICLE_START === / <article_start> → ===ARTICLE_START===）。

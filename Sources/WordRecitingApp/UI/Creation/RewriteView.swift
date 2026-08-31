@@ -4,18 +4,97 @@ import SwiftUI
 /// @ai: 不写 SQL；所有写通过 vm.runRewrite() → World.run(ContentGenSystem)。
 struct RewriteView: View {
     @State private var vm: RewriteViewModel
+    /// 左侧输入面板（侧栏）展开状态。
+    @State private var showInput = true
+    /// 右侧生成历史（侧栏）展开状态。
+    @State private var showHistory = true
 
     init(world: World) {
         _vm = State(initialValue: RewriteViewModel(world: world))
     }
 
     var body: some View {
-        HSplitView {
-            inputPane.frame(minWidth: 280, idealWidth: 340)
-            outputPane.frame(minWidth: 300)
-            historyPane.frame(minWidth: 200, idealWidth: 250)
+        // 抽屉式侧栏：overlay 覆盖在结果区上方滑入/滑出，不挤压主内容布局
+        outputPane
+            .overlay(alignment: .leading) {
+                if showInput {
+                    inputDrawer.transition(.move(edge: .leading))
+                }
+            }
+            .overlay(alignment: .trailing) {
+                if showHistory {
+                    historyDrawer.transition(.move(edge: .trailing))
+                }
+            }
+            .animation(.spring(response: 0.32, dampingFraction: 0.9), value: showInput)
+            .animation(.spring(response: 0.32, dampingFraction: 0.9), value: showHistory)
+            // 裁剪到内容区边界：抽屉滑入/滑出动画不会盖到左侧全局导航栏
+            .clipped()
+            .onAppear { vm.loadHistory() }
+    }
+
+    // MARK: - 抽屉侧栏
+
+    /// 左侧抽屉：输入设置（覆盖式滑入）。
+    private var inputDrawer: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text("输入设置").font(.headline)
+                Spacer()
+                Button { showInput = false } label: {
+                    Image(systemName: "chevron.compact.left")
+                }
+                .buttonStyle(.borderless)
+                .help("收起侧栏")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            Divider()
+            inputPane
         }
-        .onAppear { vm.loadHistory() }
+        .frame(width: 380)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(.regularMaterial)
+        .shadow(color: .black.opacity(0.22), radius: 10, x: 4, y: 0)
+    }
+
+    /// 右侧抽屉：生成历史（覆盖式滑入）。
+    private var historyDrawer: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Text("生成历史").font(.headline)
+                Spacer()
+                Button { vm.loadHistory() } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("刷新历史")
+                Button { showHistory = false } label: {
+                    Image(systemName: "chevron.compact.right")
+                }
+                .buttonStyle(.borderless)
+                .help("收起侧栏")
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            Divider()
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(vm.history) { item in
+                        Button { vm.selectHistory(item.id) } label: {
+                            historyCard(item)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+        }
+        .frame(width: 250)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(.regularMaterial)
+        .shadow(color: .black.opacity(0.22), radius: 10, x: -4, y: 0)
     }
 
     // MARK: - 左：输入
@@ -52,12 +131,22 @@ struct RewriteView: View {
     private var outputPane: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
+                Button { showInput.toggle() } label: {
+                    Image(systemName: "sidebar.left")
+                }
+                .buttonStyle(.borderless)
+                .help(showInput ? "收起输入面板" : "展开输入面板")
                 Text("改写结果").font(.headline)
                 Spacer()
                 if let article = vm.resultArticle, !article.spans.isEmpty {
                     Text("\(article.spans.count) 处替换")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Button { showHistory.toggle() } label: {
+                    Image(systemName: "sidebar.right")
+                }
+                .buttonStyle(.borderless)
+                .help(showHistory ? "收起生成历史" : "展开生成历史")
             }
             ScrollView {
                 if let article = vm.resultArticle {
@@ -101,30 +190,6 @@ struct RewriteView: View {
     }
 
     // MARK: - 右：历史
-
-    private var historyPane: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("生成历史").font(.headline)
-                Spacer()
-                Button { vm.loadHistory() } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(.borderless)
-                .help("刷新历史")
-            }
-            List {
-                ForEach(vm.history) { item in
-                    Button { vm.selectHistory(item.id) } label: {
-                        historyCard(item)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .listStyle(.plain)
-        }
-        .padding(16)
-    }
 
     private func historyCard(_ item: ArticleHistoryItem) -> some View {
         VStack(alignment: .leading, spacing: 4) {

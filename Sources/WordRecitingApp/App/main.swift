@@ -42,16 +42,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.window = window
     }
 
-    /// 构建持久化 World：~/Library/Application Support/WordRecitingApp/db.sqlite。
+    /// 退出前释放重量资源：停 llama-server 子进程 + 释放进程内模型缓存。
+    /// @ai: llama.framework 的 Metal device 全局析构在 macOS 27 beta 上有竞态崩溃
+    ///     （ggml_metal_rsets_free abort，exit() 全局析构与后台 residency 线程竞态）。
+    ///      这里先释放模型权重 + 停子进程，减少占用与竞态窗口；backend 析构竞态是
+    ///      llama.cpp 已知问题，非本应用可修，彻底解决需等 llama.cpp 适配 macOS 27。
+    @MainActor
+    func applicationWillTerminate(_ notification: Notification) {
+        LlamaServerProcess.shared.stopIdleWatcher()
+        LlamaServerProcess.shared.stop()
+        LlamaModelCache.shared.releaseAll()
+    }
+
+    /// 构建持久化 World：~/Library/Application Support/wordincontxt/db.sqlite。
+    /// 若存在旧目录 WordRecitingApp 而新目录不存在，自动做一次性迁移。
     /// 文件 DB 失败时回退 in-memory（保证 app 可启动）。
     private func makeWorld() -> World {
         do {
-            let fm = FileManager.default
-            let support = try fm.url(
-                for: .applicationSupportDirectory, in: .userDomainMask,
-                appropriateFor: nil, create: true)
-            let dir = support.appendingPathComponent("WordRecitingApp", isDirectory: true)
-            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            let dir = try AppIdentity.ensureSupportDirectory()
             let dbPath = dir.appendingPathComponent("db.sqlite").path
             let appDB = try AppDatabase.file(dbPath)
             return World(database: appDB)

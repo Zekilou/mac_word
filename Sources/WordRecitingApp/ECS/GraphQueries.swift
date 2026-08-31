@@ -165,25 +165,51 @@ final class GraphQueries: @unchecked Sendable {
 
     // MARK: - 5. 按 text_a 查 Lemma
 
-    /// 按 comp_text.text_a 精确匹配 Lemma 节点，返回 entity_id。
+    /// 便捷版本（自开读事务）。
     /// @ai: 内容生成器用此方法把源文中的词映射到 Lemma EntityID。
     func findLemmaId(byTextA textA: String) throws -> EntityID? {
         try database.dbWriter.read { db in
-            try String.fetchOne(
-                db,
-                sql: """
-                SELECT t.entity_id
-                FROM comp_text t
-                JOIN nodes n ON n.id = t.entity_id
-                WHERE t.text_a = ? AND n.kind = 'lemma'
-                LIMIT 1
-                """,
-                arguments: [textA])
+            try findLemmaId(db, byTextA: textA)
         }
     }
 
-    // MARK: - 6. 同义词（maps_to + comp_edge_weighted）
+    /// db 版本（System 事务内复用）。
+    /// 匹配策略（分层）：
+    ///   1. **精确相等**（COLLATE NOCASE，走 idx_comp_text_text_a 索引）——最明确
+    ///   2. **前缀范围匹配**（[textA, textA+\u{FFFF}] 区间，同样走 NOCASE 索引），
+    ///      取 `length(text_a)` 最短 —— 兼容 "abandon[ə'bændən]" / "abandon (v.)" 带尾巴 headword
+    /// @ai: 不再用 LOWER()（会使 NOCASE 索引失效，10 万词级查询退化全表扫描）。
+    func findLemmaId(_ db: Database, byTextA textA: String) throws -> EntityID? {
+        let exact = try String.fetchOne(
+            db,
+            sql: """
+            SELECT t.entity_id
+            FROM comp_text t
+            JOIN nodes n ON n.id = t.entity_id
+            WHERE t.text_a = ? COLLATE NOCASE AND n.kind = 'lemma'
+            LIMIT 1
+            """,
+            arguments: [textA])
+        if let exact { return exact }
 
+        // 前缀范围匹配 + 长度最短 = 最干净的那条
+        let upper = textA + "\u{FFFF}"
+        return try String.fetchOne(
+            db,
+            sql: """
+            SELECT t.entity_id
+            FROM comp_text t
+            JOIN nodes n ON n.id = t.entity_id
+            WHERE n.kind = 'lemma'
+              AND t.text_a >= ? COLLATE NOCASE
+              AND t.text_a < ? COLLATE NOCASE
+            ORDER BY LENGTH(t.text_a) ASC
+            LIMIT 1
+            """,
+            arguments: [textA, upper])
+    }
+
+    // MARK: - 6. 同义词（maps_to + comp_edge_weighted）
     /// 返回某 lemma 的所有 maps_to 同义词，附带权重 / source_type / 表面形式。
     /// 路径：edges(rel_type='maps_to') JOIN comp_edge_weighted JOIN comp_text(对端)。
     func synonyms(of lemmaId: EntityID) throws -> [SynonymInfo] {
@@ -283,6 +309,32 @@ final class GraphQueries: @unchecked Sendable {
             return StoredArticle(
                 id: id, createdAt: createdAt, body: body,
                 spans: spans, generatorId: generatorId)
+        }
+    }
+
+    // MARK: - 9. 批量 lemma 表面形式（造文用）
+
+    /// 返回一批 lemma 的干净表面形式（text_a 剥离音标尾巴），用于造文模板填充。
+    func lemmaSurfaces(for ids: [EntityID]) throws -> [EntityID: String] {
+        guard !ids.isEmpty else { return [:] }
+        return try database.dbWriter.read { db in
+            let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+            let sql = """
+            SELECT entity_id, text_a
+            FROM comp_text
+            WHERE entity_id IN (\(placeholders))
+            """
+            let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(ids))
+            var result: [EntityID: String] = [:]
+            for row in rows {
+                guard let raw: String = row["text_a"] else { continue }
+                // 剥离 "[音标]" / "(词性)" 尾巴，取纯单词前缀
+                let plain = raw.prefix { ch in
+                    ch.isLetter || ch == "-" || ch == "'"
+                }
+                result[row["entity_id"]] = plain.isEmpty ? raw : String(plain)
+            }
+            return result
         }
     }
 }

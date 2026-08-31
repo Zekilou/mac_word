@@ -284,3 +284,43 @@ struct AnalyticsCacheComponent: Codable, FetchableRecord, PersistableRecord, Sen
         case payloadJson = "payload_json"
     }
 }
+
+// MARK: - User Known
+// 用户词汇掌握度：全局上下文，挂 Lemma（全库唯一），不受词包影响。
+// 状态与卡片彻底分离——这里只记"会不会"，不建卡。
+// mastery（unsigned float）：0 = 无记录；1 = 完全不会；2 = 完全会；1~2 连续渐变。
+
+struct UserKnownComponent: Codable, FetchableRecord, PersistableRecord, Sendable {
+    static let databaseTableName = "comp_user_known"
+    var entityId: String
+    /// 掌握度：0 = 无记录，1 = 不会，2 = 会（1~2 连续渐变）。
+    var mastery: Double
+    /// 出现过次数（RSS 等文章自动记录；不判定会/不会）。0 = 从未出现在阅读文本。
+    var seenCount: Int
+    /// 状态来源：init（初始化标记）/ article（文章词反馈）/ manual（手动）。
+    var source: String
+    var updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case entityId = "entity_id"
+        case mastery
+        case seenCount = "seen_count"
+        case source
+        case updatedAt = "updated_at"
+    }
+}
+
+// MARK: - Lemma Definition
+// 多来源释义合并（挂 Lemma）：导入追加合并不覆盖，text_b 为主释义。
+
+struct LemmaDefinitionComponent: Codable, FetchableRecord, PersistableRecord, Sendable {
+    static let databaseTableName = "comp_lemma_definitions"
+    var entityId: String
+    /// JSON 数组：[{ "source": "deck:<deckId>", "definition": "..." }]。
+    var definitionsJson: String?
+
+    enum CodingKeys: String, CodingKey {
+        case entityId = "entity_id"
+        case definitionsJson = "definitions_json"
+    }
+}

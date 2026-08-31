@@ -34,10 +34,27 @@ final class GenerateViewModel {
     var genStage: GenStage?
     /// 实时流式输出缓冲（生成中显示在内容栏，打字机效果）。
     var streamedText: String = ""
+    /// 本次生成目标词的表面形式（runGenerate 时固定，供流式正文实时高亮）。
+    var liveSurfaces: [EntityID: String] = [:]
     var history: [ArticleHistoryItem] = []
     var selectedArticle: StoredArticle?
     /// 本次阅读会话中已标记过的目标词（lemmaId 集合，用于 UI 绿色反馈）。
     var ratedLemmaIds: Set<EntityID> = []
+
+    // MARK: - 文章全词状态（阅读区词块）
+
+    /// 当前阅读文章的词列表（词块布局；目标词 isTarget=true 走复习评分交互，其余走全局掌握度）。
+    var articleWords: [ArticleWordToken] = []
+    /// 会话内点击覆盖状态（lemma → 会不会）；未点过的词跟随全局记录。
+    var sessionWordStates: [String: Bool] = [:]
+    /// 全局掌握度（lemma → mastery）：已记录词直接标色。
+    var masteryByLemma: [String: Double] = [:]
+    /// 出现过次数（lemma → seen_count）。
+    var seenByLemma: [String: Int] = [:]
+    /// 已加载文章的 body 标识（ensureArticleWords 守卫：body 相同则零副作用返回，防重绘重入/每帧 SQL）。
+    var loadedBodyKey: String?
+    /// 词形 → lemmaId 缓存（预解析一次，渲染路径零 SQL；articleMarkState 惰性兜底）。
+    var lemmaIdByWord: [String: EntityID] = [:]
 
     // MARK: - 依赖
 
@@ -55,6 +72,18 @@ final class GenerateViewModel {
     var llmAPIKey: String = ""
     let constraints: GenerationConstraints = GenerationConstraints()
 
+    /// API 配置列表（转发 AppSettings；增删改在设置页「API 配置」区）。
+    var apiConfigs: [APIConfig] {
+        get { settings.apiConfigs }
+        set { settings.apiConfigs = newValue }
+    }
+
+    /// 当前生效的 API 配置 id。
+    var activeAPIConfigID: String? {
+        get { settings.activeAPIConfigID }
+        set { settings.activeAPIConfigID = newValue }
+    }
+
     /// 切换远端服务类型时应用该服务的默认地址/模型/Key 状态。
     func applyProviderDefaults() {
         llmBaseURL = remoteProvider.defaultBaseURL
@@ -64,15 +93,51 @@ final class GenerateViewModel {
         }
     }
 
+    /// 应用选中的 API 配置：同步到本地字段 + 设置生效项。
+    /// @ai: 设置页与创作页共用组件后，创作页切换配置走这里（生成前 persistSettings 写回）。
+    func applyAPIConfig(_ config: APIConfig) {
+        settings.activateAPIConfig(id: config.id)
+        remoteProvider = config.provider
+        llmModel = config.model
+        llmBaseURL = config.baseURL
+        llmAPIKey = config.apiKey
+        // 配置发生改变 → 触发联通性 + 模型类型探测（异步，不阻塞 UI）
+        probeActiveConfig()
+    }
+
+    /// 当前生效配置是否思考型模型（探测结果；nil=未探测）。
+    var activeConfigIsThinking: Bool? {
+        settings.activeAPIConfig.isThinking
+    }
+
+    /// 联通性 + 模型类型探测（配置变更时触发）。
+    /// @ai: 探测结果写回 APIConfig.isThinking（设置页可手动覆盖）；失败不打断生成（保守按普通型）。
+    func probeActiveConfig() {
+        guard generatorTier == .remote else { return }
+        let client = OpenAICompatibleClient(
+            baseURL: llmBaseURL,
+            apiKey: llmAPIKey.isEmpty ? nil : llmAPIKey,
+            model: llmModel)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await client.probe()
+            guard result.reachable else { return }  // 联通失败：保留原判定，不打断
+            var config = self.settings.activeAPIConfig
+            config.isThinking = result.isThinking
+            self.settings.upsertAPIConfig(config)
+        }
+    }
+
     init(world: World, settings: AppSettings = .shared) {
         self.world = world
         self.settings = settings
         // 启动时从设置读入
         generatorTier = settings.generatorTier
-        remoteProvider = settings.remoteProvider
-        llmModel = settings.llmModel
-        llmBaseURL = settings.llmBaseURL
-        llmAPIKey = settings.llmAPIKey
+        let active = settings.activeAPIConfig
+        remoteProvider = active.provider
+        llmModel = active.model
+        llmBaseURL = active.baseURL
+        llmAPIKey = active.apiKey
     }
 
     /// 把当前生成配置写回 AppSettings（生成前调用，保证设置页与生成页一致）。
@@ -105,8 +170,15 @@ final class GenerateViewModel {
     var lastSkipped: [SkippedWord] = []
     /// 思考日志（生成过程中实时累积，路由到左侧进度区）。
     var thinkingLog: [ThinkingLogItem] = []
+    /// 模型自报的当前阶段（来自 THINKING 标记行；无则回退管线阶段）。
+    var modelStage: String?
     /// 当前流式阶段指标（首 token/速率/token 数）。
     var streamStats = StreamStats()
+
+    /// 流式正文的目标词 spans（随 streamedText 增长实时重算，阅读区生成中即高亮）。
+    var liveSpans: [SpanInfo] {
+        LocalLLMGenerator.findTargetSpans(body: streamedText, surfaces: liveSurfaces)
+    }
 
     /// 进度回调：阶段切换 + 流式 token + 逐词进度 → 切回主线程更新 UI。
     private var progressHandler: @Sendable (GenProgress) -> Void {
@@ -126,6 +198,10 @@ final class GenerateViewModel {
                 phaseStartAt = Date()
                 firstTokenSeen = false
                 streamStats = StreamStats()
+            }
+            if stage == .polishing {
+                // 自查输出即最终正文：从头流式展示，防「草稿 + 自查全文」拼接
+                streamedText = ""
             }
             if let id = activityID {
                 let p: Double
@@ -156,6 +232,15 @@ final class GenerateViewModel {
         case .word(let done, let total, let word):
             embedWordProgress = EmbedWordProgress(done: done, total: total, word: word)
         case .thought(let thought):
+            // 模型 THINKING 自报行 → 当前阶段（模型自己标记；顶部全局状态条同步）
+            if thought.id.hasPrefix("model-"), thought.message.hasPrefix("模型：") {
+                let t = String(thought.message.dropFirst("模型：".count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                modelStage = t.isEmpty ? nil : t
+                if let id = activityID, let stage = modelStage {
+                    GlobalActivityCenter.shared.update(id, message: "模型：\(stage)")
+                }
+            }
             let elapsed = Date().timeIntervalSince(genStartedAt ?? Date())
             if let idx = thinkingLog.firstIndex(where: { $0.id == thought.id }) {
                 thinkingLog[idx] = ThinkingLogItem(
@@ -172,21 +257,83 @@ final class GenerateViewModel {
 
     /// 按当前档位构造生成器。
     /// @ai: 进程内档用 LlamaCPPClient（swift-llama-cpp 的 llama.cpp 引擎），需先在设置选择模型文件。
+    ///      进程内档 + 启用「本地 agent 增强」+ llama-server 运行中 → 改走 sidecar（回退 LocalLLMGenerator）。
+    ///      embeddingProvider：按「词向量来源」设置构造（内置 GloVe / 远端 API）；查询失败自动回退 LLM 联想。
     func makeGenerator() throws -> any ContentGenerator {
+        let embeddingProvider: EmbeddingProvider? = makeEmbeddingProvider()
         switch generatorTier {
         case .processLocal:
             guard let path = settings.localModelPath, !path.isEmpty else {
                 throw GenerateError.engineUnavailable(
                     "请先在「设置」→「进程内模型」选择 GGUF 模型文件（可导入或从 Ollama 提取）。")
             }
-            return LocalLLMGenerator(
-                client: LlamaCPPClient(modelPath: path), onProgress: progressHandler)
+            let fallback = LocalLLMGenerator(
+                client: LlamaCPPClient(modelPath: path),
+                contextWindow: settings.contextWindow,
+                outputTokenLimit: settings.maxOutputTokens > 0 ? settings.maxOutputTokens : nil,
+                onProgress: progressHandler,
+                embeddingProvider: embeddingProvider)
+            // 本地 agent 增强：启用 + llama-server 运行中 + sidecar 可定位 → 接管，回退 LocalLLMGenerator。
+            // @ai: 与远端 useAgentSidecar 互不干扰；model 名用 gguf 文件名（llama-server 接受任意名）。
+            if settings.useLocalAgentEnhancement,
+               let baseURL = LlamaServerProcess.shared.baseURL,
+               let (exec, script) = AgentSidecarLocator.resolve() {
+                let spec = AgentSidecarModelSpec(
+                    model: URL(fileURLWithPath: path).lastPathComponent,
+                    baseURL: baseURL,
+                    apiKey: "",
+                    isThinking: false,
+                    contextWindow: settings.contextWindow,
+                    temperature: 0.7)
+                return AgentSidecarGenerator(
+                    client: AgentSidecarClient(executable: exec, scriptPath: script),
+                    spec: spec,
+                    onProgress: progressHandler,
+                    fallback: fallback)
+            }
+            return fallback
         case .remote:
+            let isThinking = settings.activeAPIConfig.isThinking ?? false
             let client = OpenAICompatibleClient(
                 baseURL: llmBaseURL,
                 apiKey: llmAPIKey.isEmpty ? nil : llmAPIKey,
-                model: llmModel)
-            return LocalLLMGenerator(client: client, onProgress: progressHandler)
+                model: llmModel,
+                isThinking: isThinking)
+            let fallback = LocalLLMGenerator(
+                client: client,
+                contextWindow: settings.contextWindow,
+                outputTokenLimit: settings.maxOutputTokens > 0 ? settings.maxOutputTokens : nil,
+                onProgress: progressHandler, isThinking: isThinking,
+                embeddingProvider: embeddingProvider)
+            // Agent sidecar 开启且可定位时接管远端管线；不可用/出错自动回退 fallback（LocalLLMGenerator）。
+            if settings.useAgentSidecar, let (exec, script) = AgentSidecarLocator.resolve() {
+                let spec = AgentSidecarModelSpec(
+                    model: llmModel, baseURL: llmBaseURL, apiKey: llmAPIKey,
+                    isThinking: isThinking,
+                    contextWindow: settings.contextWindow,
+                    temperature: 0.7)
+                return AgentSidecarGenerator(
+                    client: AgentSidecarClient(executable: exec, scriptPath: script),
+                    spec: spec,
+                    onProgress: progressHandler,
+                    fallback: fallback)
+            }
+            return fallback
+        }
+    }
+
+    /// 按「词向量来源」设置构造词向量提供者。
+    /// @ai: 内置 GloVe 未随包分发时返回 nil（管线回退 LLM 联想）；远端用 activeAPIConfig 的地址/Key。
+    private func makeEmbeddingProvider() -> EmbeddingProvider? {
+        switch settings.embeddingSource {
+        case .builtinGloVe:
+            return GloVeEmbeddingProvider()
+        case .remoteAPI:
+            let config = settings.activeAPIConfig
+            return RemoteEmbeddingProvider(
+                baseURL: config.baseURL,
+                apiKey: config.apiKey.isEmpty ? nil : config.apiKey,
+                model: settings.embeddingModel)
         }
     }
 
@@ -290,6 +437,8 @@ final class GenerateViewModel {
         embedWordProgress = nil
         lastSkipped = []
         thinkingLog = []
+        modelStage = nil
+        liveSurfaces = [:]
         streamStats = StreamStats()
         genStartedAt = Date()
         phaseStartAt = nil
@@ -297,17 +446,14 @@ final class GenerateViewModel {
         do {
             persistSettings()
             let targetIds = try resolveTargets()
+            liveSurfaces = (try? world.graph.lemmaSurfaces(for: targetIds)) ?? [:]
             guard !targetIds.isEmpty else {
                 errorMessage = "请至少选择一个目标词（从词库勾选或手动输入）"
                 isGenerating = false
                 return
             }
             let topic = topic.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !topic.isEmpty else {
-                errorMessage = "请输入文章主题（如：科技趋势、环保）"
-                isGenerating = false
-                return
-            }
+            // 主题可留空：空主题时模型围绕目标词本身成文（词驱动），嵌入成功率更高
             var c = constraints
             c.topic = topic
             c.embeddingVerification = settings.embeddingVerification
@@ -433,6 +579,18 @@ final class GenerateViewModel {
         guard let id = activityID, isGenerating else { return }
         GlobalActivityCenter.shared.cancel(id)
     }
+
+    // MARK: - 当前模型参数信息（生成方式列底部展示）
+
+    /// 当前模型的可展示参数（名称 / 参数量 / 上下文窗口 / 采样参数）。
+    /// @ai: 与设置页共用 GenerationConfigSection.makeParameters，保证两处一致。
+    var modelParameters: [ModelParameter] {
+        GenerationConfigSection.makeParameters(
+            tier: generatorTier, model: llmModel,
+            localPath: settings.localModelPath, maxWords: constraints.maxWords,
+            contextWindow: settings.contextWindow,
+            outputTokenLimit: settings.maxOutputTokens > 0 ? settings.maxOutputTokens : nil)
+    }
 }
 
 /// 思考日志条目（VM 侧，按生成器 thought 事件 upsert）。
@@ -464,6 +622,14 @@ struct WordCoverage: Identifiable, Equatable, Sendable {
     let word: String
     let hit: Bool
     var id: String { word }
+}
+
+/// 当前模型的可展示参数行（生成方式列底部信息卡）。
+struct ModelParameter: Identifiable, Sendable {
+    let label: String
+    let value: String
+    let help: String
+    var id: String { label }
 }
 
 /// 生成器构造错误（不落库，仅 UI 提示）。

@@ -2,6 +2,8 @@ import GRDB
 
 /// v0 建表迁移：nodes 登记薄 + edges 登记薄 + 15 张 comp_* 组件表 + 索引。
 /// 所有 comp_* 表以 entity_id 为 PK + FK → nodes(id) ON DELETE CASCADE。
+/// v1：用户词汇掌握度（全局上下文）+ 多来源释义 + text_a 索引（10 万词级性能）。
+/// v2：掌握度值域迁移（旧 0~1 → 新 1~2，0=无记录/1=不会/2=会）。
 enum SchemaMigrator {
     static func migrate(_ writer: some DatabaseWriter) throws {
         var m = DatabaseMigrator()
@@ -9,6 +11,41 @@ enum SchemaMigrator {
             try createAllTables(db)
             try createAllIndexes(db)
             try createTriggers(db)
+        }
+        m.registerMigration("v1_user_known") { db in
+            try db.execute(sql: """
+                CREATE TABLE comp_user_known (
+                    entity_id  TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+                    mastery    REAL NOT NULL,
+                    source     TEXT NOT NULL,
+                    updated_at DATETIME NOT NULL
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE comp_lemma_definitions (
+                    entity_id        TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+                    definitions_json TEXT
+                )
+                """)
+            // 词形精确/前缀查询索引（COLLATE NOCASE 使 findLemmaId 可走索引，10 万词级）
+            try db.execute(sql: "CREATE INDEX idx_comp_text_text_a ON comp_text(text_a COLLATE NOCASE)")
+        }
+        // 掌握度值域：旧 0=不会/1=会 → 新 0=无记录/1=不会/2=会（线性 +1，0.5 → 1.5 保持中间语义）。
+        // @ai: 只对旧值域数据执行一次；新库空表无操作。
+        m.registerMigration("v2_user_known_scale") { db in
+            try db.execute(sql: """
+                UPDATE comp_user_known
+                SET mastery = mastery + 1
+                WHERE mastery >= 0 AND mastery <= 1
+                """)
+        }
+        // v3：出现记录（seen）——RSS 等文章中的词自动记"出现过"，但不判定会/不会。
+        // mastery 语义不变（0=无记录/1=不会/2=会）；seen_count>0 且 mastery<=0 = 出现过未确认。
+        m.registerMigration("v3_user_known_seen") { db in
+            try db.execute(sql: """
+                ALTER TABLE comp_user_known
+                ADD COLUMN seen_count INTEGER NOT NULL DEFAULT 0
+                """)
         }
         try m.migrate(writer)
     }

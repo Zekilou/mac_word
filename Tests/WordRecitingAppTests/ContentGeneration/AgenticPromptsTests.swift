@@ -163,6 +163,52 @@ final class AgenticPromptsTests: XCTestCase {
             "Hello world."), "Hello world.", "无标记行原样保留")
     }
 
+    // MARK: - 前导大纲/计划回显剥离
+
+    func testExtractMarkedBodyStripsLeadingOutline() {
+        let raw = """
+        - Paragraph 1: The craft of writing.
+        - Paragraph 2: How to build vocabulary in context,
+        - Paragraph 3: The nuance between synonyms and choosing the right word,
+
+        A good writer must master both style and substance.
+        """
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody(raw),
+                       "A good writer must master both style and substance.",
+                       "无标记时也应剥离前导大纲回显")
+    }
+
+    func testExtractMarkedBodyStripsOutlineInsideMarkers() {
+        let raw = """
+        ===ARTICLE_START===
+        Paragraph 1: Intro
+        Paragraph 2: Body
+
+        The real article begins here.
+        ===ARTICLE_END===
+        """
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody(raw),
+                       "The real article begins here.",
+                       "标记内的大纲回显也应剥离")
+    }
+
+    func testStripLeadingJunkKeepsNormalText() {
+        let text = "Part of the reason for this is the weather.\nThe rest is luck."
+        XCTAssertEqual(AgenticPrompts.stripLeadingJunk(text), text,
+                       "Part of the reason: 不应被误判为大纲")
+    }
+
+    func testExtractMarkedBodyStripsMetaPreamble() {
+        let raw = """
+        I'm not sure whether my draft is ready for publication — I need help with editing.
+
+        A good writer must master both style and substance.
+        """
+        XCTAssertEqual(AgenticPrompts.extractMarkedBody(raw),
+                       "A good writer must master both style and substance.",
+                       "任务元句应被剥离")
+    }
+
     func testPlainPromptContainsMarkerInstruction() {
         let p = GenStrategyPrompt.plainPrompt(theme: "科技", maxWords: 100)
         XCTAssertTrue(p.contains("===ARTICLE_START==="), "纯净草稿应要求标记")

@@ -152,10 +152,14 @@ final class AnkiImporter: WordImporter, Sendable {
             let values = note.flds.components(separatedBy: "\u{1F}")
             let m = Self.mapFields(fieldNames, values: values)
             nodes.append(.init(id: lemmaId, kind: .lemma, createdAt: now))
-            let tc = TextComponent(entityId: lemmaId, textA: m.headword, textB: m.definition, language: nil)
+            // 清洗 HTML/媒体标签：text_a 必须是干净单词，便于改写匹配
+            let cleanA = Self.sanitizeHTML(m.headword) ?? ""
+            let cleanB = Self.sanitizeHTML(m.definition)
+            let cleanPhon = Self.sanitizeHTML(m.phonetic)
+            let tc = TextComponent(entityId: lemmaId, textA: cleanA, textB: cleanB, language: nil)
             texts.append(tc); noteTexts[note.id] = tc
             lemmaMetas.append(LemmaMetaComponent(
-                entityId: lemmaId, pos: m.pos, phoneticUs: m.phonetic,
+                entityId: lemmaId, pos: m.pos, phoneticUs: cleanPhon,
                 phoneticUk: nil, sensesJson: m.sensesJson))
             // 合并 Anki note.tags + 映射到的 tags 字段（如 GRE 的"考纲"）
             var allTags: [String] = []

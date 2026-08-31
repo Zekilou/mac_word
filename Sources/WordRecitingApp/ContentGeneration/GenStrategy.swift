@@ -65,11 +65,15 @@ enum GenStrategyPrompt {
 
     /// 策略 pass：让 LLM 自己决定生成方式 / 改写窗口 / 嵌入不足处理。
     /// @ai: 输出固定三行（STRATEGY/WINDOW/FALLBACK），便于宽容解析；不写规则硬判。
+    ///      主题可留空：空主题时词驱动，直接选 plan-embed（词即主题，无需先写后改写）。
     static func strategyPrompt(theme: String, words: [String]) -> String {
         let wordList = words.isEmpty ? "(none)" : words.joined(separator: ", ")
+        let themeLine = theme.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Theme: (none — the target words ARE the topic)"
+            : "Theme: \(theme)"
         return """
         You are the director of an article-generation task.
-        Theme: \(theme)
+        \(themeLine)
         Target vocabulary: \(wordList)
 
         Decide how to write the article so those words appear naturally:
@@ -78,12 +82,19 @@ enum GenStrategyPrompt {
                    (write the article around them), or "generate-rewrite" when the words
                    are unrelated, rare, or hard to weave in (write a normal article first,
                    then rewrite parts of it to include them).
+                   When NO theme is given, always choose "plan-embed": the target words
+                   themselves are the topic, so building the article around them is
+                   natural and no pre-writing/rewriting is needed.
 
         WINDOW — for generate-rewrite, how much text to reconsider at a time when
                  inserting a word: "sentence", "paragraph", or "whole".
 
         FALLBACK — if, after writing, some words still cannot be included naturally:
                    "skip" (leave them out) or "retry" (try once more with feedback).
+
+        IMPORTANT — when the target words are rare, technical, or weakly related to the
+                    theme, prefer "generate-rewrite": write a normal on-topic article
+                    first, then weave the words in, so the article never drifts off-topic.
 
         Output ONLY these three lines, no explanation:
         STRATEGY: ...
@@ -117,9 +128,16 @@ enum GenStrategyPrompt {
     }
 
     /// 第一步：正常生成（只约束主题 + 长度，不要求嵌入任何词）。
+    /// @ai: 主题可留空——空主题时让模型自由选材（词驱动改写阶段再嵌词）；
+    ///      强制规则块前置（与 LocalLLMGenerator.hardRules 一致，压缩保护常驻）。
     static func plainPrompt(theme: String, maxWords: Int) -> String {
-        """
-        Write a natural, engaging English article about: \(theme).
+        let topicLine = theme.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "Write a natural, engaging English article on a topic of your choice."
+            : "Write a natural, engaging English article about: \(theme)."
+        return """
+        \(LocalLLMGenerator.hardRules)
+
+        \(topicLine)
 
         Requirements:
         - Paragraph layout: separate paragraphs with one blank line; write full
@@ -132,6 +150,9 @@ enum GenStrategyPrompt {
           (article body)
           ===ARTICLE_END===
         - Output nothing outside these markers.
+        - You may announce your current action on its own line, starting exactly with
+          "THINKING:" (for example "THINKING: writing the opening paragraph"). Such
+          lines are removed from the final text, so write the article itself completely.
         """
     }
 }

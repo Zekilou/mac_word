@@ -85,6 +85,20 @@ final class GenerateViewModelTests: XCTestCase {
         XCTAssertTrue(generator is LocalLLMGenerator)
     }
 
+    @MainActor func testMakeGeneratorRemoteUsesSidecarWhenEnabled() throws {
+        let vm = makeVM()
+        XCTAssertFalse(vm.settings.useAgentSidecar, "默认关闭 sidecar 管线")
+        vm.settings.useAgentSidecar = true
+        let generator = try vm.makeGenerator()
+        if AgentSidecarLocator.resolve() != nil {
+            XCTAssertTrue(generator is AgentSidecarGenerator,
+                          "sidecar 可定位时应接管远端管线（不可用时回退）")
+        } else {
+            XCTAssertTrue(generator is LocalLLMGenerator,
+                          "sidecar 不可定位时应回退 LocalLLMGenerator")
+        }
+    }
+
     @MainActor func testMakeGeneratorProcessLocalWithoutModelThrows() {
         let vm = makeVM()
         vm.generatorTier = .processLocal
@@ -269,5 +283,46 @@ final class GenerateViewModelTests: XCTestCase {
         XCTAssertEqual(vm.streamedText, "Hello.", "实时展示应剥离独立标记行")
         vm.applyProgress(.token(" world\n===ARTICLE_END==="))
         XCTAssertEqual(vm.streamedText, "Hello. world", "结束标记行也应剥离")
+    }
+
+    // MARK: - 实时解析 + 模型自标记阶段
+
+    @MainActor func testModelStageTracksModelThinkingLines() {
+        let vm = makeVM()
+        vm.applyProgress(.thought(GenThought(
+            id: "model-1", kind: .info, message: "模型：writing the opening paragraph",
+            detail: nil, status: .running)))
+        XCTAssertEqual(vm.modelStage, "writing the opening paragraph")
+        vm.applyProgress(.thought(GenThought(
+            id: "model-2", kind: .info, message: "模型：drafting the conclusion",
+            detail: nil, status: .running)))
+        XCTAssertEqual(vm.modelStage, "drafting the conclusion", "最新模型标记覆盖")
+    }
+
+    @MainActor func testModelStageIgnoresNonModelThoughts() {
+        let vm = makeVM()
+        vm.applyProgress(.thought(GenThought(
+            id: "strategy", kind: .strategy, message: "策略：plan-embed",
+            detail: nil, status: .done)))
+        XCTAssertNil(vm.modelStage, "编排阶段事件不应覆盖模型自报阶段")
+    }
+
+    @MainActor func testPolishStageRestartsLiveStream() {
+        let vm = makeVM()
+        vm.applyProgress(.token("Draft body here."))
+        XCTAssertEqual(vm.streamedText, "Draft body here.")
+        vm.applyProgress(.stage(.polishing))
+        XCTAssertEqual(vm.streamedText, "", "自查输出即最终正文，应从头流式展示防拼接")
+    }
+
+    @MainActor func testLiveSpansHighlightTargetsInStream() {
+        let vm = makeVM()
+        vm.liveSurfaces = ["lemma-1": "abandon", "lemma-2": "battle"]
+        vm.applyProgress(.token("We should never abandon our dreams."))
+        XCTAssertEqual(vm.streamedText, "We should never abandon our dreams.")
+        let spans = vm.liveSpans
+        XCTAssertEqual(spans.count, 1, "实时解析应只命中已完整出现的目标词")
+        XCTAssertEqual(spans[0].lemmaId, "lemma-1")
+        XCTAssertFalse(vm.liveSpans.isEmpty)
     }
 }

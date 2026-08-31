@@ -28,7 +28,7 @@ struct ContentGenSystem: System {
         // 3. UPSERT comp_generation_meta
         try world.registry.upsertComponent(db, GenerationMetaComponent(
             entityId: articleId,
-            mode: GenerationMode.rewrite.rawValue,
+            mode: context.mode.rawValue,
             topic: context.topic,
             sourceText: context.sourceText,
             generatorId: article.generatorId,
@@ -54,10 +54,12 @@ struct ContentGenSystem: System {
     }
 }
 
-/// ContentGenSystem 的上下文：生成的文章 + 目标词列表 + 源文（可选）+ 主题（可选）。
+/// ContentGenSystem 的上下文：生成的文章 + 目标词列表 + 源文（可选）+ 主题（可选）+ 模式。
 struct ContentGenContext: Sendable {
     let article: GeneratedArticle
     let targetLemmas: [EntityID]
     let sourceText: String?
     let topic: String?
+    /// 落库时写入 comp_generation_meta 的模式（generate / rewrite）。
+    var mode: GenerationMode = .rewrite
 }

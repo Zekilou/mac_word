@@ -1,9 +1,13 @@
 import SwiftUI
 
-/// 生成过程可视化：思考日志 + 实时指标（路由到左侧生成面板的进度展示区）。
+/// 生成过程可视化：思考日志 + 实时指标 + 当前阶段（模型自标记优先）。
 struct GenThinkingLogView: View {
     let log: [ThinkingLogItem]
     let stats: StreamStats
+    /// 模型自报的当前阶段（THINKING 标记行）；nil 时回退 fallbackStage。
+    let modelStage: String?
+    /// 管线阶段的兜底标签（模型未自报时展示）。
+    let fallbackStage: String
     let isGenerating: Bool
     let onStop: () -> Void
 
@@ -19,6 +23,9 @@ struct GenThinkingLogView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
+            }
+            if isGenerating {
+                currentStageRow
             }
             if log.isEmpty {
                 Text("正在启动…")
@@ -48,6 +55,25 @@ struct GenThinkingLogView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
+    /// 当前阶段：优先模型自己的 THINKING 标记，无则回退管线阶段（醒目标识，等的人一眼看到模型在干嘛）。
+    private var currentStageRow: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("当前阶段（模型自报）").font(.caption2).foregroundStyle(.tertiary)
+                Text(modelStage ?? fallbackStage)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(2)
+                    .foregroundStyle(modelStage == nil ? Color.primary : Color.accentColor)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(Color.accentColor.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+    }
+
     private func logRow(_ item: ThinkingLogItem) -> some View {
         HStack(alignment: .top, spacing: 6) {
             Text(icon(item.kind)).font(.caption)
@@ -60,11 +86,14 @@ struct GenThinkingLogView: View {
                 }
                 if let detail = item.detail, !detail.isEmpty {
                     DisclosureGroup("详情") {
-                        Text(detail)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        ScrollView {
+                            Text(detail)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 100)   // 限制高度防撑高窗口
                     }
                     .font(.caption2)
                 }

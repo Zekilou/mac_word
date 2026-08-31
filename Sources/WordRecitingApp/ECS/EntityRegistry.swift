@@ -27,6 +27,8 @@ final class EntityRegistry: @unchecked Sendable {
         .customData: "comp_custom_data",
         .importFailure: "comp_import_failure",
         .analyticsCache: "comp_analytics_cache",
+        .userKnown: "comp_user_known",
+        .lemmaDefinition: "comp_lemma_definitions",
     ]
 
     init(database: AppDatabase) {
@@ -154,6 +156,25 @@ final class EntityRegistry: @unchecked Sendable {
         try database.dbWriter.read { db in
             try filterEntityIDs(db, requiringAll: componentIDs)
         }
+    }
+
+    // MARK: - Edge 删除（按 src/dst/rel 找 edge 再删 node，CASCADE 清理组件）
+
+    /// 在事务内按 src/dst/rel 精确查找 edge id，找到则删对应 node（CASCADE 自动删 edges 行 + 组件）。
+    /// 返回被删除的 edge id，未找到返回 nil。
+    func deleteEdgeIfPresent(
+        _ db: Database, srcId: EntityID, dstId: EntityID, rel: EdgeRel
+    ) throws -> EntityID? {
+        let sql = """
+        SELECT e.id FROM edges e
+        WHERE e.src_id = ? AND e.dst_id = ? AND e.rel_type = ?
+        LIMIT 1
+        """
+        guard let edgeId: EntityID = try String.fetchOne(
+            db, sql: sql, arguments: [srcId, dstId, rel.rawValue])
+        else { return nil }
+        try deleteNode(db, id: edgeId)
+        return edgeId
     }
 }
 

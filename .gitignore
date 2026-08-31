@@ -2,5 +2,19 @@
 .swiftpm/
 *.xcodeproj/
 DerivedData/
-.build/
 Package.resolved
+
+# 分发产物（不入库；由 scripts/create-app-bundle.sh 现场生成）
+*.app/
+*.app
+*.zip
+
+# macOS
+.DS_Store
+
+# 本地归档/大体积虚拟环境（不纳入版本库）
+_archive/
+external_src/
+
+# 大型词向量二进制（本地生成，不提交）
+Sources/WordRecitingApp/Resources/glove50d.bin
