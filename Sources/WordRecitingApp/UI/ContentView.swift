@@ -36,8 +36,6 @@ struct ContentView: View {
             .ignoresSafeArea(edges: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // TODO(验证后删除)：临时演示胶囊实例（模拟实时进度，不消失便于调试）
-        .onAppear { startDemoActivity() }
     }
 
     /// 竖向分割线（全高，从窗口最顶开始）。
@@ -47,27 +45,6 @@ struct ContentView: View {
             .frame(width: 1)
             .padding(.leading, offset)
     }
-
-    /// 临时验证用：注册一个模拟实时进度的活动实例；进度循环不结束（debug 持续可见）。
-    /// @ai: 验证完成后删除本方法及其调用。
-    private func startDemoActivity() {
-        guard GlobalActivityCenter.shared.items.isEmpty else { return }
-        let id = GlobalActivityCenter.shared.begin(
-            title: "胶囊演示", icon: "sparkles", progress: 0.0, message: "调试中…")
-        Task {
-            var step = 0
-            while true {
-                try? await Task.sleep(nanoseconds: 300_000_000)
-                step += 1
-                let p = (Double(step % 12) + 1) / 12   // 0→1 循环
-                await MainActor.run {
-                    GlobalActivityCenter.shared.update(id, progress: p, message: "调试第 \(step) 步")
-                }
-            }
-        }
-    }
-
-    // MARK: - 一级栏（三区，可折叠）
 
     private func zoneSidebar(topInset: CGFloat) -> some View {
         // 顶部不再显示软件名（系统标题栏已显示）与分割线：

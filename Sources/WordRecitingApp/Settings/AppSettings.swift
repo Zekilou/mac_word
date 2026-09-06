@@ -35,9 +35,6 @@ final class AppSettings {
         static let defaultWordFilter = "settings.defaultWordFilter"
         static let defaultRandomCount = "settings.defaultRandomCount"
         static let appearanceMode = "settings.appearanceMode"
-        static let readingFontSize = "settings.readingFontSize"
-        static let highlightStyle = "settings.highlightStyle"
-        static let listDensity = "settings.listDensity"
         static let apiConfigs = "settings.apiConfigs"
         static let activeAPIConfigID = "settings.activeAPIConfigID"
         static let embeddingSource = "settings.embeddingSource"
@@ -238,32 +235,6 @@ final class AppSettings {
         set { defaults.set(newValue.rawValue, forKey: Key.appearanceMode) }
     }
 
-    /// 阅读字号（pt）。
-    var readingFontSize: Double {
-        get { defaults.object(forKey: Key.readingFontSize) as? Double ?? 15 }
-        set { defaults.set(newValue, forKey: Key.readingFontSize) }
-    }
-
-    /// 目标词高亮样式。
-    var highlightStyle: HighlightStyle {
-        get {
-            guard let raw = defaults.string(forKey: Key.highlightStyle),
-                  let style = HighlightStyle(rawValue: raw) else { return .chip }
-            return style
-        }
-        set { defaults.set(newValue.rawValue, forKey: Key.highlightStyle) }
-    }
-
-    /// 列表密度（紧凑/常规）。
-    var listDensity: ListDensity {
-        get {
-            guard let raw = defaults.string(forKey: Key.listDensity),
-                  let density = ListDensity(rawValue: raw) else { return .regular }
-            return density
-        }
-        set { defaults.set(newValue.rawValue, forKey: Key.listDensity) }
-    }
-
     // MARK: - API 配置（多条，可增删改；当前选中的为生效配置）
 
     /// 全部 API 配置（持久化 JSON）。空时按默认提供商生成一条。
@@ -364,8 +335,7 @@ final class AppSettings {
                     Key.contextWindow, Key.maxOutputTokens,
                     Key.defaultTargetCount, Key.defaultArticleLength,
                     Key.defaultWordFilter, Key.defaultRandomCount,
-                    Key.appearanceMode, Key.readingFontSize,
-                    Key.highlightStyle, Key.listDensity,
+                    Key.appearanceMode,
                     Key.apiConfigs, Key.activeAPIConfigID,
                     Key.embeddingSource, Key.embeddingModel,
                     Key.useAgentSidecar, Key.useLocalAgentEnhancement,
@@ -416,23 +386,6 @@ enum AppearanceMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// 目标词高亮样式。
-enum HighlightStyle: String, CaseIterable, Identifiable {
-    case chip = "chip"
-    case underline = "underline"
-    case background = "background"
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .chip: return "词块高亮"
-        case .underline: return "下划线"
-        case .background: return "背景色"
-        }
-    }
-}
-
 /// 词向量来源（RAG 选锚）。
 enum EmbeddingSource: String, CaseIterable, Identifiable, Sendable {
     /// 内置 GloVe（30000 高频词 50 维，随 app 分发，零网络零命令行）。
@@ -455,21 +408,6 @@ enum EmbeddingSource: String, CaseIterable, Identifiable, Sendable {
             return "随 app 分发的 3 万高频词向量，完全离线；生僻词自动用词库释义/LLM 兜底合成"
         case .remoteAPI:
             return "用远端 embedding 模型（如 Ollama nomic-embed-text）选锚，语义更准但依赖服务在线"
-        }
-    }
-}
-
-/// 列表密度。
-enum ListDensity: String, CaseIterable, Identifiable {
-    case compact = "compact"
-    case regular = "regular"
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .compact: return "紧凑"
-        case .regular: return "常规"
         }
     }
 }

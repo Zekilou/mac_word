@@ -1,8 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// 设置-显示（spec §4.3）：外观（跟随系统/浅色/深色）+ 阅读（字号/高亮样式）+ 列表密度。
-/// @ai: 外观即时应用 NSApp.appearance；阅读/密度写入 AppSettings（消费方后续迭代接入）。
+/// 设置-显示（spec §4.3）：外观（跟随系统/浅色/深色）。
+/// @ai: 外观即时应用 NSApp.appearance。
 struct DisplaySettingsView: View {
     @State private var settings = AppSettings.shared
 
@@ -10,8 +10,6 @@ struct DisplaySettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 appearanceSection
-                readingSection
-                densitySection
             }
             .padding(20)
             .frame(maxWidth: 640, alignment: .leading)
@@ -41,37 +39,6 @@ struct DisplaySettingsView: View {
         }
     }
 
-    // MARK: - 阅读
-
-    private var readingSection: some View {
-        section("阅读") {
-            VStack(alignment: .leading, spacing: 10) {
-                stepper("文章字号", value: $settings.readingFontSize, in: 10...24, step: 1)
-                Picker("目标词高亮样式", selection: $settings.highlightStyle) {
-                    ForEach(HighlightStyle.allCases) { style in
-                        Text(style.label).tag(style)
-                    }
-                }
-                .labelsHidden()
-                .frame(width: 220)
-            }
-        }
-    }
-
-    // MARK: - 列表密度
-
-    private var densitySection: some View {
-        section("列表密度") {
-            Picker("列表密度", selection: $settings.listDensity) {
-                ForEach(ListDensity.allCases) { density in
-                    Text(density.label).tag(density)
-                }
-            }
-            .labelsHidden()
-            .frame(width: 220)
-        }
-    }
-
     // MARK: - 动作
 
     private func applyAppearance(_ mode: AppearanceMode) {
@@ -83,21 +50,6 @@ struct DisplaySettingsView: View {
     }
 
     // MARK: - 复用
-
-    private func stepper(
-        _ title: String, value: Binding<Double>, in range: ClosedRange<Double>, step: Double
-    ) -> some View {
-        HStack(spacing: 8) {
-            Text(title).font(.caption)
-            Stepper(value: value, in: range, step: step) {
-                Text("\(value.wrappedValue, specifier: "%.0f") pt")
-                    .font(.body.monospacedDigit())
-                    .frame(width: 56, alignment: .trailing)
-            }
-            .labelsHidden()
-            Spacer()
-        }
-    }
 
     private func section<Content: View>(
         _ title: String, @ViewBuilder _ content: () -> Content
