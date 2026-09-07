@@ -101,6 +101,7 @@ struct RewriteView: View {
 
     private var inputPane: some View {
         VStack(alignment: .leading, spacing: 12) {
+            generatorSelector
             labeled("源文") {
                 editor(text: $vm.sourceText, minHeight: 180)
             }
@@ -111,11 +112,14 @@ struct RewriteView: View {
                 Button {
                     Task { await vm.runRewrite() }
                 } label: {
-                    Label("快速改写", systemImage: "bolt.fill")
+                    Label("AI 改写", systemImage: "bolt.fill")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(vm.isGenerating)
                 if vm.isGenerating { ProgressView().scaleEffect(0.7) }
+                if let stage = vm.genStage {
+                    Text(stage.label).font(.caption).foregroundStyle(.secondary)
+                }
                 Spacer()
             }
             if let err = vm.errorMessage {
@@ -124,6 +128,64 @@ struct RewriteView: View {
             Spacer(minLength: 0)
         }
         .padding(16)
+    }
+
+    /// 生成方式选择：档位 + （远端时）API 配置菜单 + 当前模型/端点说明。
+    /// @ai: 与设置页共用 AppSettings；改动即时写回，生成前再 persist 一次保证一致。
+    private var generatorSelector: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("生成方式").font(.caption).foregroundStyle(.secondary)
+            Picker("生成引擎", selection: Binding(
+                get: { vm.generatorTier },
+                set: { newTier in
+                    vm.generatorTier = newTier
+                    vm.persistSettings()
+                }
+            )) {
+                ForEach(GeneratorTier.allCases) { tier in
+                    Text(tier.rawValue).tag(tier)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+
+            if vm.generatorTier == .remote {
+                apiConfigSelector
+            } else {
+                Text("进程内本地引擎：模型文件在「设置 → 模型 → 进程内模型」中选择后使用。")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// 远端档的 API 配置选择菜单（仅远程档展示）。
+    private var apiConfigSelector: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("API 配置").font(.caption2).foregroundStyle(.tertiary)
+            if vm.apiConfigs.isEmpty {
+                Text("还没有 API 配置，去「设置 → 模型 → API 配置」添加。")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            } else {
+                Picker("API 配置", selection: Binding(
+                    get: { vm.activeAPIConfigID ?? vm.apiConfigs[0].id },
+                    set: { id in
+                        if let config = vm.apiConfigs.first(where: { $0.id == id }) {
+                            vm.applyAPIConfig(config)
+                        }
+                    }
+                )) {
+                    ForEach(vm.apiConfigs) { config in
+                        Text(config.name).tag(config.id)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Text("\(vm.llmModel) · \(vm.llmBaseURL)")
+                .font(.caption2).foregroundStyle(.tertiary)
+                .lineLimit(2)
+        }
     }
 
     // MARK: - 中：diff 结果
@@ -154,7 +216,7 @@ struct RewriteView: View {
                 } else if let stored = vm.selectedArticle {
                     diffText(body: stored.body, spans: stored.spans)
                 } else {
-                    Text("点击「快速改写」生成；或从右侧历史选择一篇回看。")
+                    Text("点击「AI 改写」生成（按当前生成方式走 LLM）；或从右侧历史选择一篇回看。")
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(8)

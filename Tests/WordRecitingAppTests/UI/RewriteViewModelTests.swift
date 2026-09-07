@@ -54,7 +54,7 @@ final class RewriteViewModelTests: XCTestCase {
 
     @MainActor func testRunRewriteReplacesAndPersists() async throws {
         try setupLemmaB()
-        let vm = RewriteViewModel(world: world)
+        let vm = RewriteViewModel(world: world, generator: RuleBasedGenerator())
         vm.sourceText = "I will abandon this project."
         vm.targetsText = "forsake"
         await vm.runRewrite()
@@ -75,7 +75,7 @@ final class RewriteViewModelTests: XCTestCase {
 
     @MainActor func testRunRewriteUnknownTargetNoReplacement() async throws {
         try setupLemmaB()
-        let vm = RewriteViewModel(world: world)
+        let vm = RewriteViewModel(world: world, generator: RuleBasedGenerator())
         vm.sourceText = "I will abandon this project."
         vm.targetsText = "unknownword"
         await vm.runRewrite()
@@ -89,7 +89,7 @@ final class RewriteViewModelTests: XCTestCase {
 
     @MainActor func testRunRewriteEmptySourceProducesEmptyBody() async throws {
         try setupLemmaB()
-        let vm = RewriteViewModel(world: world)
+        let vm = RewriteViewModel(world: world, generator: RuleBasedGenerator())
         vm.sourceText = ""
         vm.targetsText = "forsake"
         await vm.runRewrite()
@@ -103,7 +103,7 @@ final class RewriteViewModelTests: XCTestCase {
 
     @MainActor func testLoadHistoryFetchesRecent() async throws {
         try setupLemmaB()
-        let vm = RewriteViewModel(world: world)
+        let vm = RewriteViewModel(world: world, generator: RuleBasedGenerator())
         vm.sourceText = "I will abandon this project."
         vm.targetsText = "forsake"
         await vm.runRewrite()
@@ -116,7 +116,7 @@ final class RewriteViewModelTests: XCTestCase {
 
     @MainActor func testSelectHistoryLoadsStoredArticle() async throws {
         try setupLemmaB()
-        let vm = RewriteViewModel(world: world)
+        let vm = RewriteViewModel(world: world, generator: RuleBasedGenerator())
         vm.sourceText = "I will abandon this project."
         vm.targetsText = "forsake"
         await vm.runRewrite()
