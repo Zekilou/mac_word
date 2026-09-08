@@ -17,6 +17,8 @@ enum NodeKind: String, Sendable, Codable, CaseIterable {
     case article
     case event
     case edge
+    /// 一次「显示词汇的上下文」（页面/会话级）。
+    case region
 }
 
 // MARK: - EdgeRel
@@ -60,6 +62,12 @@ enum ComponentID: String, Sendable, Codable, CaseIterable {
     case userKnown = "user_known"
     /// 多来源释义（挂 Lemma）。
     case lemmaDefinition = "lemma_definition"
+    /// 词汇显示上下文（挂 Region 节点）。
+    case region
+    /// 单次词事件（全量事件流，挂 Event 节点）。
+    case wordEvent = "word_event"
+    /// 词频族坐标（挂 Lemma 节点）。
+    case lemmaFrequency = "lemma_frequency"
 }
 
 // MARK: - Rating
@@ -95,6 +103,11 @@ enum GenerationMode: String, Sendable, Codable, CaseIterable {
 
 // MARK: - QualityTier
 
+/// 生成质量档位（设计文档 §4.1 定义三档）。
+/// - fast   → RuleBasedGenerator（模式 B 同义词替换，默认快速档）
+/// - local  → LocalLLMGenerator / AgentSidecarGenerator（Apple Silicon 本地推理）
+/// - remote → RemoteAPIGenerator（阶段三可选接入，当前无实现消费，预留档）
+/// @ai: 契约枚举，勿改 rawValue / case 顺序。
 enum QualityTier: String, Sendable, Codable, CaseIterable {
     case fast
     case local
@@ -210,4 +223,38 @@ enum RemoteProvider: String, Sendable, Codable, CaseIterable, Identifiable {
         case .openai: return "云端 API：需要有效 API Key（联网，默认关闭）"
         }
     }
+}
+
+// MARK: - RegionKind（词汇显示上下文种类）
+
+/// 词汇显示上下文的种类（region 的业务分类）。
+enum RegionKind: String, Sendable, Codable, CaseIterable {
+    /// 复习卡片：用户主动做题。
+    case study
+    /// RSS 文章：被动阅读。
+    case rss
+    /// 生成文章：被动阅读。
+    case generate
+    /// 词典查词：用户主动查询。
+    case dictionary
+    /// 词汇初始化会话：用户主动标记。
+    case initSession = "init"
+}
+
+// MARK: - WordEventKind（单次词事件种类）
+
+/// 单次词事件的种类（有限枚举，全量记录）。
+enum WordEventKind: String, Sendable, Codable, CaseIterable {
+    /// 在文章中被动出现。
+    case seen
+    /// 用户主动查词。
+    case lookup
+    /// 用户标记「会」。
+    case markKnown = "mark_known"
+    /// 用户标记「不会」。
+    case markUnknown = "mark_unknown"
+    /// 做题答对。
+    case quizCorrect = "quiz_correct"
+    /// 做题答错。
+    case quizWrong = "quiz_wrong"
 }
