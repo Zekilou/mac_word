@@ -47,6 +47,47 @@ enum SchemaMigrator {
                 ADD COLUMN seen_count INTEGER NOT NULL DEFAULT 0
                 """)
         }
+        // v4：词汇显示上下文（region）+ 全量词事件流 + 词频族坐标。
+        m.registerMigration("v4_region_and_word_event") { db in
+            try db.execute(sql: """
+                CREATE TABLE comp_region (
+                    entity_id  TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+                    kind       TEXT NOT NULL,
+                    label      TEXT,
+                    source_id  TEXT,
+                    trust      REAL NOT NULL,
+                    created_at DATETIME NOT NULL
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE comp_word_event (
+                    entity_id   TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+                    lemma_id    TEXT NOT NULL,
+                    region_id   TEXT NOT NULL,
+                    event_kind  TEXT NOT NULL,
+                    trust       REAL NOT NULL,
+                    occurred_at DATETIME NOT NULL,
+                    detail_json TEXT
+                )
+                """)
+            try db.execute(sql: """
+                CREATE TABLE comp_lemma_frequency (
+                    entity_id TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+                    band      INTEGER NOT NULL,
+                    freq_rank INTEGER NOT NULL,
+                    source    TEXT NOT NULL
+                )
+                """)
+            try db.execute(sql: """
+                CREATE INDEX idx_word_event_lemma_time ON comp_word_event(lemma_id, occurred_at)
+                """)
+            try db.execute(sql: """
+                CREATE INDEX idx_word_event_region ON comp_word_event(region_id)
+                """)
+            try db.execute(sql: """
+                CREATE INDEX idx_region_source ON comp_region(source_id)
+                """)
+        }
         try m.migrate(writer)
     }
 
