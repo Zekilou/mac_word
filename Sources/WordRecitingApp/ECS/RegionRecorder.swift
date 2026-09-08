@@ -10,12 +10,13 @@ struct RegionRecorder: Sendable {
         try? world.run(RegionSystem(), context: .ensure(region))
     }
 
-    /// 按 lemma id 记录事件。
+    /// 按 lemma id 记录事件，并重算这些词的 BKT 后验。
     func record(lemmaIds: [EntityID], region: RegionRef, kind: WordEventKind,
                 trust: Double? = nil, detail: String? = nil) {
         guard !lemmaIds.isEmpty else { return }
         try? world.run(RegionSystem(), context: .record(
             lemmaIds: lemmaIds, region: region, kind: kind, trust: trust, detail: detail))
+        try? world.run(MasterySystem(), context: .recompute(lemmaIds: lemmaIds))
     }
 
     /// 按词面记录事件：解析不到的词静默跳过。

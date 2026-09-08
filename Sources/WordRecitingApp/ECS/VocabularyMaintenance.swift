@@ -12,4 +12,9 @@ enum VocabularyMaintenance {
         guard let provider else { return }
         try? world.run(LemmaFrequencySystem(provider: provider), context: .stampAll)
     }
+
+    /// 为全部 Lemma 重算 BKT 后验（幂等，启动时调用一次）。
+    static func backfillMastery(world: World, parameters: BKTParameters = .default) {
+        try? world.run(MasterySystem(parameters: parameters), context: .recomputeAll)
+    }
 }

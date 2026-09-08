@@ -65,12 +65,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let world = World(database: appDB)
             // 词频坐标回填（幂等，资源缺失时自动跳过）
             VocabularyMaintenance.backfillLemmaFrequency(world: world)
+            VocabularyMaintenance.backfillMastery(world: world)
             return world
         } catch {
             // 回退：进程内内存库（关 app 即丢，仅用于兜底启动）
             let appDB = (try? AppDatabase.inMemory()) ?? (try! AppDatabase.inMemory())
             let world = World(database: appDB)
             VocabularyMaintenance.backfillLemmaFrequency(world: world)
+            VocabularyMaintenance.backfillMastery(world: world)
             return world
         }
     }

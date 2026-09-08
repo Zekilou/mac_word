@@ -52,4 +52,38 @@ final class VocabularyMaintenanceTests: XCTestCase {
 
         XCTAssertEqual(try world.graph.allLemmaFrequencies().count, 0)
     }
+
+    func testBackfillMasteryRecomputesAll() throws {
+        try makeLemma("L1", "abandon")
+        try world.run(RegionSystem(), context: .record(
+            lemmaIds: ["L1"], region: .dictionary(), kind: .markKnown,
+            trust: 1.0, detail: nil))
+
+        VocabularyMaintenance.backfillMastery(world: world)
+
+        let belief: MasteryBeliefComponent? = try world.registry.fetchComponents(
+            for: "L1", table: "comp_mastery_belief")
+        XCTAssertNotNil(belief)
+        XCTAssertEqual(belief?.opportunities, 1)
+    }
+
+    func testBackfillMasteryIsIdempotent() throws {
+        try makeLemma("L1", "abandon")
+        try world.run(RegionSystem(), context: .record(
+            lemmaIds: ["L1"], region: .dictionary(), kind: .markKnown,
+            trust: 1.0, detail: nil))
+
+        VocabularyMaintenance.backfillMastery(world: world)
+        let first = try world.registry.fetchComponents(
+            for: "L1", table: "comp_mastery_belief") as MasteryBeliefComponent?
+        VocabularyMaintenance.backfillMastery(world: world)
+        let second = try world.registry.fetchComponents(
+            for: "L1", table: "comp_mastery_belief") as MasteryBeliefComponent?
+
+        XCTAssertEqual(first?.belief ?? 0, second?.belief ?? -1, accuracy: 0.0001)
+        let count = try appDB.dbWriter.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM comp_mastery_belief")
+        }
+        XCTAssertEqual(count, 1)
+    }
 }

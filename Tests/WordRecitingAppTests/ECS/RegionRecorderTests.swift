@@ -53,4 +53,27 @@ final class RegionRecorderTests: XCTestCase {
             lemmaIds: ["L404"], region: .dictionary(), kind: .lookup)
         XCTAssertEqual(try count("SELECT COUNT(*) FROM comp_word_event"), 0)
     }
+
+    func testRecordAlsoUpdatesBelief() throws {
+        try makeLemma("L1", "abandon")
+        RegionRecorder(world: world).record(
+            lemmaIds: ["L1"], region: .dictionary(), kind: .markKnown, trust: 1.0)
+
+        let belief: MasteryBeliefComponent? = try world.registry.fetchComponents(
+            for: "L1", table: "comp_mastery_belief")
+        XCTAssertNotNil(belief)
+        XCTAssertEqual(belief?.opportunities, 1)
+        XCTAssertGreaterThan(belief?.belief ?? 0, BKTParameters.default.fallbackPrior)
+    }
+
+    func testRecordBySurfacesAlsoUpdatesBelief() throws {
+        try makeLemma("L1", "abandon")
+        RegionRecorder(world: world).record(
+            surfaces: ["abandon"], region: .rss(articleId: "A1", title: nil),
+            kind: .seen, trust: 0)
+
+        let belief: MasteryBeliefComponent? = try world.registry.fetchComponents(
+            for: "L1", table: "comp_mastery_belief")
+        XCTAssertNotNil(belief)
+    }
 }
