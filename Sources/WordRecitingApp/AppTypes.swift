@@ -68,6 +68,8 @@ enum ComponentID: String, Sendable, Codable, CaseIterable {
     case wordEvent = "word_event"
     /// 词频族坐标（挂 Lemma 节点）。
     case lemmaFrequency = "lemma_frequency"
+    /// BKT 后验掌握度概率（挂 Lemma）。
+    case masteryBelief = "mastery_belief"
 }
 
 // MARK: - Rating

@@ -88,6 +88,22 @@ enum SchemaMigrator {
                 CREATE INDEX idx_region_source ON comp_region(source_id)
                 """)
         }
+        // v5：BKT 后验掌握度概率。
+        m.registerMigration("v5_mastery_belief") { db in
+            try db.execute(sql: """
+                CREATE TABLE comp_mastery_belief (
+                    entity_id      TEXT PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+                    belief         REAL NOT NULL,
+                    opportunities  INTEGER NOT NULL,
+                    last_event_at  DATETIME,
+                    updated_at     DATETIME NOT NULL,
+                    params_version TEXT NOT NULL
+                )
+                """)
+            try db.execute(sql: """
+                CREATE INDEX idx_mastery_belief_belief ON comp_mastery_belief(belief)
+                """)
+        }
         try m.migrate(writer)
     }
 

@@ -32,6 +32,7 @@ final class EntityRegistry: @unchecked Sendable {
         .region: "comp_region",
         .wordEvent: "comp_word_event",
         .lemmaFrequency: "comp_lemma_frequency",
+        .masteryBelief: "comp_mastery_belief",
     ]
 
     init(database: AppDatabase) {

@@ -26,8 +26,8 @@ final class RegionTypesTests: XCTestCase {
     /// 合同铁律：新 case 只能追加到末尾，既有 rawValue 不得变动。
     func testNewCasesAppendedAtEnd() {
         XCTAssertEqual(NodeKind.allCases.last, .region)
-        XCTAssertEqual(Array(ComponentID.allCases.suffix(3)),
-                       [.region, .wordEvent, .lemmaFrequency])
+        XCTAssertEqual(Array(ComponentID.allCases.suffix(4)),
+                       [.region, .wordEvent, .lemmaFrequency, .masteryBelief])
         XCTAssertEqual(ComponentID.region.rawValue, "region")
         XCTAssertEqual(ComponentID.wordEvent.rawValue, "word_event")
         XCTAssertEqual(ComponentID.lemmaFrequency.rawValue, "lemma_frequency")
