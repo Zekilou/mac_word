@@ -29,6 +29,9 @@ final class EntityRegistry: @unchecked Sendable {
         .analyticsCache: "comp_analytics_cache",
         .userKnown: "comp_user_known",
         .lemmaDefinition: "comp_lemma_definitions",
+        .region: "comp_region",
+        .wordEvent: "comp_word_event",
+        .lemmaFrequency: "comp_lemma_frequency",
     ]
 
     init(database: AppDatabase) {
