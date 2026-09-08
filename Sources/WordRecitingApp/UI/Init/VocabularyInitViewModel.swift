@@ -45,6 +45,8 @@ final class VocabularyInitViewModel {
     let world: World
     let settings: AppSettings
     private var activityID: UUID?
+    /// 本次初始化会话 id：用于把本会话的词事件归入同一 region。
+    private let sessionId: EntityID = UUID().uuidString
 
     init(world: World, settings: AppSettings = .shared) {
         self.world = world
@@ -297,6 +299,15 @@ final class VocabularyInitViewModel {
         }
         do {
             try world.run(UserKnownSystem(), context: .batch(words: batchWords, source: "init"))
+            let region = RegionRef.initSession(sessionId: sessionId)
+            let recorder = RegionRecorder(world: world)
+            recorder.ensure(region)
+            for item in batchWords {
+                recorder.record(lemmaIds: [item.word].compactMap {
+                    try? world.graph.findLemmaId(byTextA: $0)
+                }, region: region,
+                   kind: item.known ? .markKnown : .markUnknown, trust: 1.0)
+            }
             isInitialized = true
             loadMastery()
             refreshOverview()

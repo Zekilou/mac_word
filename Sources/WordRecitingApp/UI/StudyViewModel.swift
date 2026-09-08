@@ -51,6 +51,11 @@ final class StudyViewModel {
         do {
             try world.run(StudySystem(), context: StudySystem.StudyOp(
                 cardId: card.cardId, rating: rating, reviewedAt: Date()))
+            // 主动做题 → 高可信词事件
+            RegionRecorder(world: world).record(
+                lemmaIds: [card.lemmaId],
+                region: .study(cardId: card.cardId),
+                kind: rating.rawValue >= Rating.good.rawValue ? .quizCorrect : .quizWrong)
             currentIndex += 1
             isFront = true
             stats = try world.graph.studyStats()

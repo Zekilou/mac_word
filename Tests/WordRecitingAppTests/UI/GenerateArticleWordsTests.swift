@@ -163,4 +163,22 @@ final class GenerateArticleWordsTests: XCTestCase {
         XCTAssertEqual(vm.articleMarkState(for: vm.articleWords[0]), .known,
                        "完成后重复调用保持状态")
     }
+
+    /// 造文页主动标记 → 写高可信词事件（region = generate）。
+    @MainActor func testSetArticleWordExtremeRecordsTrustedEvent() throws {
+        let vm = makeVM()
+        let body = "battle cat"
+        let words = GenerateViewModel.makeArticleWords(body: body, spans: [])
+        let token = words[0]
+
+        vm.ensureArticleWords(body: body, spans: [])
+        vm.setArticleWordExtreme(token, known: false)
+
+        let count = try appDB.dbWriter.read { db in
+            try Int.fetchOne(db, sql: """
+                SELECT COUNT(*) FROM comp_word_event WHERE trust = 1 AND event_kind = 'mark_unknown'
+                """)
+        }
+        XCTAssertEqual(count, 1)
+    }
 }

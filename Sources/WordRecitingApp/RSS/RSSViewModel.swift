@@ -147,7 +147,12 @@ final class RSSViewModel {
         }
     }
 
-    private func presentArticle(text: String) {
+    /// 当前文章的显示上下文（region id 稳定可复用）。
+    private var currentRegion: RegionRef {
+        RegionRef.rss(articleId: selectedItem?.id ?? "unknown", title: selectedItem?.title)
+    }
+
+    func presentArticle(text: String) {
         articleText = text
         words = VocabularyInitGenerator.extractWords(text)
         // 自动记录"出现过"：全部词 seen+1，mastery 不变（无记录保持 0）
@@ -158,6 +163,9 @@ final class RSSViewModel {
         } catch {
             errorMessage = "词汇记录失败：\(error)"
         }
+        // 被动看到 → 低可信词事件（trust = 0）
+        RegionRecorder(world: world).record(
+            surfaces: seenWords, region: currentRegion, kind: .seen, trust: 0.0)
         isFetchingArticle = false
     }
 
@@ -184,16 +192,22 @@ final class RSSViewModel {
     func toggle(_ word: InitWord) {
         guard let lemmaId = try? world.graph.findLemmaId(byTextA: word.lemma) else { return }
         let op: UserKnownOp
+        let eventKind: WordEventKind
         switch markState(for: word) {
         case .known:
             op = .markUnknown(lemmaId: lemmaId, source: "rss")
+            eventKind = .markUnknown
         case .unknown:
             op = .markKnown(lemmaId: lemmaId, source: "rss")
+            eventKind = .markKnown
         case .seen, .pending, .learning:
             op = .markUnknown(lemmaId: lemmaId, source: "rss")
+            eventKind = .markUnknown
         }
         do {
             try world.run(UserKnownSystem(), context: op)
+            RegionRecorder(world: world).record(
+                lemmaIds: [lemmaId], region: currentRegion, kind: eventKind, trust: 1.0)
             reloadStates()
         } catch {
             errorMessage = "标记失败：\(error)"
@@ -209,6 +223,9 @@ final class RSSViewModel {
             : .markUnknown(lemmaId: lemmaId, source: "rss")
         do {
             try world.run(UserKnownSystem(), context: op)
+            RegionRecorder(world: world).record(
+                surfaces: [word.lemma], region: currentRegion,
+                kind: known ? .markKnown : .markUnknown, trust: 1.0)
             reloadStates()
         } catch {
             errorMessage = "标记失败：\(error)"

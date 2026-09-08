@@ -68,6 +68,8 @@ extension GenerateViewModel {
         guard !isGenerating else { return }
         loadWordMastery()
         prefetchLemmaIds()
+        // 文章打开 → 登记显示上下文（流式期间不登记，避免每个 token 建一个 region）
+        RegionRecorder(world: world).ensure(currentArticleRegion)
     }
 
     /// 刷新全局掌握度与出现记录映射（与初始化段落同口径）。
@@ -141,6 +143,13 @@ extension GenerateViewModel {
         persistArticleWordState(token)
     }
 
+    /// 当前生成文章的显示上下文（region id 稳定可复用；剥离流式/完成态前缀）。
+    private var currentArticleRegion: RegionRef {
+        var key = loadedBodyKey ?? "session"
+        if key.hasPrefix("g:") || key.hasPrefix("i:") { key.removeFirst(2) }
+        return RegionRef.generate(articleId: key, title: nil)
+    }
+
     /// 把会话状态落库为全局掌握度极值（source="reading"，不建卡）。
     private func persistArticleWordState(_ token: ArticleWordToken) {
         guard let known = sessionWordStates[token.lemma] else { return }
@@ -148,6 +157,9 @@ extension GenerateViewModel {
             try world.run(
                 UserKnownSystem(),
                 context: .batch(words: [(token.lemma, known)], source: "reading"))
+            RegionRecorder(world: world).record(
+                surfaces: [token.lemma], region: currentArticleRegion,
+                kind: known ? .markKnown : .markUnknown, trust: 1.0)
             loadWordMastery()
         } catch {
             errorMessage = "\(error)"

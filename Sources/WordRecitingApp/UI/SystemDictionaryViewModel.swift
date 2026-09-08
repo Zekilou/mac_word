@@ -88,6 +88,9 @@ final class SystemDictionaryViewModel {
         do {
             try world.run(UserKnownSystem(), context:
                 .batch(words: [(word, known)], source: "dictionary"))
+            RegionRecorder(world: world).record(
+                surfaces: [word], region: .dictionary(),
+                kind: known ? .markKnown : .markUnknown, trust: 1.0)
             refreshState(for: word)
         } catch {
             // 写失败保持原状态，UI 层不崩溃
