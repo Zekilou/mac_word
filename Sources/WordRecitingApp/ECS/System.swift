@@ -8,6 +8,7 @@ import Foundation
 protocol System: Sendable {
     associatedtype Context: Sendable
     /// 该 System 只处理同时持有这些组件的 entity。
+    /// 为空 = 不依赖 entity 集合（纯 op 驱动）：World.run 会传空数组，不做全表扫描。
     static var requiresAll: [ComponentID] { get }
     /// 在 World.run 开启的写事务内执行。
     func execute(world: World, db: Database, entities: [EntityID], context: Context) throws
