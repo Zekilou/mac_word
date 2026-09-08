@@ -17,7 +17,8 @@ struct AnkiCard: Sendable {
 
 /// Anki .apkg 导入器：解压 → 只读打开 SQLite → 解析 col/notes/cards → 输出 ImportBatch。
 /// @ai: 不直接写库，只输出 ImportBatch 交给 ImportSystem。
-/// TODO: 解析 [sound:xxx.mp3] / <img src="xxx"> → comp_media_refs
+/// TODO: 解析 [sound:xxx.mp3] / <img src="xxx"> → comp_media_refs（设计文档 §3.4 / §6 规划，
+/// 属阶段二 AnkiImporter 完整接入的待实现功能，非死代码；当前先剥掉这些标记，媒体后续落地 AppSupport）。
 final class AnkiImporter: WordImporter, Sendable {
     static let identifier = "anki"
     static let supportedExtensions = ["apkg", "colpkg"]

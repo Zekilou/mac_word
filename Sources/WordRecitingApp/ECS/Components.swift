@@ -125,6 +125,10 @@ struct ReviewEventComponent: Codable, FetchableRecord, PersistableRecord, Sendab
 
 // MARK: - Media Refs
 
+/// 媒体引用组件（设计文档 §3.4 comp_media_refs）。
+/// 规划用途：Anki .apkg 导入时解析 [sound:xxx.mp3] / <img src="xxx"> → media refs，
+/// 媒体文件落地到 AppSupport（§6）。阶段一仅建表占位，阶段二 AnkiImporter 完整接入后消费。
+/// @ai: 属规划 Component，勿删。
 struct MediaRefsComponent: Codable, FetchableRecord, PersistableRecord, Sendable {
     static let databaseTableName = "comp_media_refs"
     var entityId: String

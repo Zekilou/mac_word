@@ -1,9 +1,11 @@
 import GRDB
 import Foundation
 
-/// AnalyticsSystem 空壳：高级数据分析（heatmap / weak-lemma / 遗忘曲线等），
-/// 读 review_event 聚合，写 comp_analytics_cache。
-/// @ai: 阶段三填充；当前仅声明 requiresAll 与空 execute。
+/// AnalyticsSystem（设计文档 §2 / §3.6 规划的 4 大 System 之一：Import/Study/ContentGen/Analytics）。
+/// 阶段一只做空壳占位（声明 requiresAll + 空 execute）；阶段三填充：
+/// AnalyticsModule 协议 + 5 内置模块（heatmap / 遗忘曲线 / weak-lemma / 负载预测 / FSRS 拟合），
+/// 读 review_event 聚合，写 comp_analytics_cache（§10.19）。
+/// @ai: 阶段三接入，勿删，属规划骨架。
 struct AnalyticsSystem: System {
     static let requiresAll: [ComponentID] = [.reviewEvent]
     typealias Context = Void

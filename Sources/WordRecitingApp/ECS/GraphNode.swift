@@ -30,6 +30,10 @@ struct DeckNode: GraphNode {
     let createdAt: Date
 }
 
+/// 句子节点（设计文档 §3.2 规划的 7 个 Entity struct 之一）。
+/// 阶段一仅作图模型骨架占位，无业务引用；规划语义：Tatoeba 导入器生成 SentenceNode + appears_in 边
+/// （§10.14），ContentGenSystem 产文时拆分成 N × SentenceNode（§8.2）。
+/// @ai: 属规划骨架，勿删（删除会破坏 ECS 图模型 7 Entity 完整性）。
 struct SentenceNode: GraphNode {
     let id: EntityID
     var kind: NodeKind { .sentence }

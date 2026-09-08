@@ -239,7 +239,8 @@ private struct SectionRowButton: View {
 
 // MARK: - 占位页
 
-/// 尚未实现的子区占位页（期 1 骨架用，后续任务逐个替换为真实页面）。
+/// 通用子区占位页（期 1 骨架，后续任务逐个替换为真实页面）。
+/// 注：当前已无任何调用（阅读/设置等子区均已被真实页面替换），保留作为通用占位组件。
 struct PlaceholderPage: View {
     let title: String
 
