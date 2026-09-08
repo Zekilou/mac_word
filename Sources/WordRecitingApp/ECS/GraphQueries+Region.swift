@@ -38,17 +38,24 @@ extension GraphQueries {
 
     // MARK: - 词事件
 
-    /// 某 Lemma 的全部词事件（时间倒序）。
+    /// db 版本：复用外层事务（System 内必须用这个）。`ascending = true` 按时间升序（重放用）。
+    func wordEvents(_ db: Database, lemmaId: EntityID,
+                    ascending: Bool = true, limit: Int = 5000) throws -> [WordEventRow] {
+        let order = ascending ? "ASC" : "DESC"
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT entity_id, lemma_id, region_id, event_kind, trust, occurred_at
+            FROM comp_word_event
+            WHERE lemma_id = ?
+            ORDER BY occurred_at \(order), entity_id \(order)
+            LIMIT ?
+            """, arguments: [lemmaId, limit])
+        return rows.map(Self.makeEventRow)
+    }
+
+    /// 便捷版本：自开读事务，时间倒序。
     func wordEvents(lemmaId: EntityID, limit: Int = 500) throws -> [WordEventRow] {
         try database.dbWriter.read { db in
-            let rows = try Row.fetchAll(db, sql: """
-                SELECT entity_id, lemma_id, region_id, event_kind, trust, occurred_at
-                FROM comp_word_event
-                WHERE lemma_id = ?
-                ORDER BY occurred_at DESC, entity_id DESC
-                LIMIT ?
-                """, arguments: [lemmaId, limit])
-            return rows.map(Self.makeEventRow)
+            try self.wordEvents(db, lemmaId: lemmaId, ascending: false, limit: limit)
         }
     }
 
@@ -89,12 +96,17 @@ extension GraphQueries {
         }
     }
 
-    /// 某 Lemma 出现在多少个不同 region（上下文多样性 CD 的原始量）。
+    /// db 版本：某 Lemma 出现在多少个不同 region。
+    func distinctRegionCount(_ db: Database, lemmaId: EntityID) throws -> Int {
+        try Int.fetchOne(db, sql: """
+            SELECT COUNT(DISTINCT region_id) FROM comp_word_event WHERE lemma_id = ?
+            """, arguments: [lemmaId]) ?? 0
+    }
+
+    /// 便捷版本：自开读事务。
     func distinctRegionCount(lemmaId: EntityID) throws -> Int {
         try database.dbWriter.read { db in
-            try Int.fetchOne(db, sql: """
-                SELECT COUNT(DISTINCT region_id) FROM comp_word_event WHERE lemma_id = ?
-                """, arguments: [lemmaId]) ?? 0
+            try self.distinctRegionCount(db, lemmaId: lemmaId)
         }
     }
 
@@ -115,13 +127,19 @@ extension GraphQueries {
 
     // MARK: - 词频坐标
 
+    /// db 版本：某 Lemma 的词频坐标。
+    func lemmaFrequency(_ db: Database, lemmaId: EntityID) throws -> LemmaFrequencyRow? {
+        guard let row = try Row.fetchOne(db, sql: """
+            SELECT band, freq_rank, source FROM comp_lemma_frequency WHERE entity_id = ?
+            """, arguments: [lemmaId]) else { return nil }
+        return LemmaFrequencyRow(band: row["band"], freqRank: row["freq_rank"],
+                                 source: row["source"])
+    }
+
+    /// 便捷版本：自开读事务。
     func lemmaFrequency(lemmaId: EntityID) throws -> LemmaFrequencyRow? {
         try database.dbWriter.read { db in
-            guard let row = try Row.fetchOne(db, sql: """
-                SELECT band, freq_rank, source FROM comp_lemma_frequency WHERE entity_id = ?
-                """, arguments: [lemmaId]) else { return nil }
-            return LemmaFrequencyRow(band: row["band"], freqRank: row["freq_rank"],
-                                     source: row["source"])
+            try self.lemmaFrequency(db, lemmaId: lemmaId)
         }
     }
 
