@@ -17,7 +17,8 @@ let package = Package(
                 .product(name: "LlamaSwift", package: "llama.swift")
             ],
             resources: [
-                .process("Resources/glove50d.bin")
+                .process("Resources/glove50d.bin"),
+                .process("Resources/word_families.json")
             ]
         ),
         .testTarget(

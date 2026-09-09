@@ -55,7 +55,7 @@ final class BundledWordFrequencyProviderTests: XCTestCase {
 
     /// 资源缺失时优雅降级：不崩溃，返回 nil。
     func testBundledResourceLoadsIfPresent() throws {
-        guard let provider = BundledWordFrequencyProvider(bundledIn: .module) else {
+        guard let provider = WordFrequency.bundled else {
             throw XCTSkip("word_families.json 未生成，跳过")
         }
         XCTAssertFalse(provider.sourceName.isEmpty)
