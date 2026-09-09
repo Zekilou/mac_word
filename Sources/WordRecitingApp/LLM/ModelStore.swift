@@ -69,6 +69,19 @@ struct ModelStore {
             .sorted { $0.fileName < $1.fileName }
     }
 
+    /// 除当前选中模型外、可安全删除的模型。
+    /// @ai: 选中路径缺失或无效时返回空——宁可不让删，也不能把正在用的模型当「未用」删掉。
+    ///      比较前解析符号链接（macOS 临时目录 /var 与 /private/var 会不一致）。
+    func unusedModels(selectedPath: String?) -> [LocalModel] {
+        guard let selectedPath, FileManager.default.fileExists(atPath: selectedPath) else {
+            return []
+        }
+        let selected = URL(fileURLWithPath: selectedPath).resolvingSymlinksInPath().path
+        return discoveredModels().filter {
+            $0.url.resolvingSymlinksInPath().path != selected
+        }
+    }
+
     // MARK: - 从 Ollama 提取
 
     /// 列出 Ollama 已安装模型（可提取的 GGUF）。

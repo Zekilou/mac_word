@@ -15,6 +15,19 @@ final class AppSettings {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        migrateLegacyPaths()
+    }
+
+    /// 1.0.0 改名后，把 UserDefaults 里指向旧目录的绝对路径迁到新目录（幂等）。
+    /// @ai: 目录迁移在 AppIdentity.ensureSupportDirectory 里做，持久化路径不会自动跟着改；
+    ///      不改就会让本地模型/二进制指向已不存在的旧目录（本地模型"无法使用"）。
+    private func migrateLegacyPaths() {
+        for key in [Key.localModelPath, Key.llamaServerBinaryPath] {
+            guard let raw = defaults.string(forKey: key),
+                  let migrated = AppIdentity.migrateLegacyPath(raw),
+                  migrated != raw else { continue }
+            defaults.set(migrated, forKey: key)
+        }
     }
 
     // MARK: - 键名
@@ -94,6 +107,15 @@ final class AppSettings {
                 defaults.removeObject(forKey: Key.localModelPath)
             }
         }
+    }
+
+    /// 已选模型文件是否真实可用（存在且是文件）。
+    /// @ai: 只读判断，供设置页提示；不改变 localModelPath 的原值语义。
+    var localModelPathIsUsable: Bool {
+        guard let path = localModelPath, !path.isEmpty else { return false }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir) else { return false }
+        return !isDir.boolValue
     }
 
     // MARK: - 复习调度

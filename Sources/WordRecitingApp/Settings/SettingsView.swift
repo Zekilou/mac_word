@@ -339,6 +339,18 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+            if let path = vm.settings.localModelPath, !vm.settings.localModelPathIsUsable {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text("已选模型文件不存在：\(path)。请在下方列表重新选择。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                    Spacer()
+                }
+                .padding(.vertical, 4)
+            }
         }
     }
 

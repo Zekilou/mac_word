@@ -56,4 +56,24 @@ extension AppIdentity {
         }
         return target
     }
+
+}
+
+extension AppIdentity {
+    /// 把旧目录前缀（`WordRecitingApp`）替换为新前缀（`wordincontxt`）。
+    /// @ai: 1.0.0 改名只 mv 了目录，UserDefaults 里持久化的绝对路径不会自动跟着改；
+    ///      不改就会让本地模型 / llama-server 二进制指向已不存在的旧目录（本地模型"无法使用"）。
+    ///      仅在旧路径确实不存在、且新路径存在时替换，避免误改用户自定义目录。
+    static func migrateLegacyPath(_ path: String?) -> String? {
+        guard let path else { return nil }
+        let legacyMarker = "/\(supportDirLegacy)/"
+        guard path.contains(legacyMarker) else { return path }
+        let migrated = path.replacingOccurrences(
+            of: legacyMarker, with: "/\(supportDirName)/")
+        let fm = FileManager.default
+        if !fm.fileExists(atPath: path), fm.fileExists(atPath: migrated) {
+            return migrated
+        }
+        return path
+    }
 }

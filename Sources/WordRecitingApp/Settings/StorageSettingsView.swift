@@ -123,14 +123,13 @@ struct StorageSettingsView: View {
         dbSize = fileSize(dbURL) ?? 0
         let models = store.discoveredModels()
         modelTotalBytes = models.reduce(0) { $0 + $1.fileSizeBytes }
-        unusedModelCount = models.filter { $0.url.path != settings.localModelPath }.count
+        unusedModelCount = store.unusedModels(selectedPath: settings.localModelPath).count
         articleCount = (try? world.graph.articleCount()) ?? 0
     }
 
     private func deleteUnusedModels() {
         let fm = FileManager.default
-        let unused = store.discoveredModels()
-            .filter { $0.url.path != settings.localModelPath }
+        let unused = store.unusedModels(selectedPath: settings.localModelPath)
         var deleted = 0
         for model in unused {
             if (try? fm.removeItem(at: model.url)) != nil {
