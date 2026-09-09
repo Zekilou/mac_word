@@ -154,6 +154,24 @@ extension GraphQueries {
         try database.dbWriter.read { db in try self.allReviewRecords(db) }
     }
 
+    /// 复习队列内卡片的到期时间（nil = 新卡，视为立即到期），供负载预测。
+    /// @ai: 排除口径与 `dueCards` 完全一致（显式标记会 / 模型高置信不进队列）。
+    func queueDueDates() throws -> [Date?] {
+        try database.dbWriter.read { db in
+            let rows = try Row.fetchAll(db, sql: """
+            SELECT ss.due_at FROM nodes c
+            LEFT JOIN comp_schedule_state ss ON ss.entity_id = c.id
+            LEFT JOIN edges inst_edge ON inst_edge.src_id = c.id AND inst_edge.rel_type = 'instantiates'
+            LEFT JOIN comp_user_known uk ON uk.entity_id = inst_edge.dst_id
+            LEFT JOIN comp_mastery_belief mb ON mb.entity_id = inst_edge.dst_id
+            WHERE c.kind = 'card'
+              AND (uk.mastery IS NULL OR uk.mastery < ?)
+              AND (mb.belief IS NULL OR mb.belief < ?)
+            """, arguments: [Self.dueMasteryCutoff, Self.dueBeliefCutoff])
+            return rows.map { $0["due_at"] as Date? }
+        }
+    }
+
     /// 学习统计：总词数 / 已学 / 今日到期 / 今日已复习 / 总复习次数 / AGAIN 率。
     func studyStats(now: Date = Date()) throws -> StudyStats {
         try database.dbWriter.read { db in

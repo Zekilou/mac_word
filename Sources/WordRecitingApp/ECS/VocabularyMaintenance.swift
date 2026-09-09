@@ -21,6 +21,6 @@ enum VocabularyMaintenance {
     /// 重建每日统计快照（幂等，启动时调用一次）。
     /// @ai: 单遍重放词事件流，与 backfillMastery 同口径；分析页/首页的趋势数据源。
     static func backfillDailyStats(world: World) {
-        try? DailyStatRecorder.rebuild(world: world)
+        _ = try? DailyStatRecorder.rebuild(world: world)
     }
 }

@@ -34,12 +34,22 @@ struct VocabularyProfile: Sendable, Equatable {
 }
 
 /// 画像构建（纯函数，可单测）。
-/// @ai: 未观测词用 BKTModel.prior 外推——这是**估计**，不是测量。
+/// @ai: 外推规则（v2）：
+///   - 只统计已观测词的后验之和；
+///   - 仅当该带观测数 ≥ `minObservedForExtrapolation` 时才把未观测词按**平滑后的实测认识率**外推
+///     （rate = sumBelief / (observed + rateSmoothing)），否则该带不外推；
+///   - 完全没有观测的带贡献 0。
+///   旧版按 `BKTModel.prior` 外推，会把 25000 词族 × 先验质量堆成 ~12.5k 的虚高估计；
+///   直接按实测率外推也会被「只收藏自己认识的词」的选择偏差拉爆（14 个观测 × 1000 词族）。
 enum VocabularyProfileBuilder {
 
+    /// 外推所需的最小观测样本（低于此认为证据不足，只统计已观测词）。
+    static let minObservedForExtrapolation = 30
+    /// 认识率的平滑伪计数（避免小样本「全对」直接铺满整带）。
+    static let rateSmoothing = 10.0
+
     static func build(bandStats: [BandStat],
-                      bandFamilyCounts: [Int: Int],
-                      parameters: BKTParameters = .default) -> VocabularyProfile {
+                      bandFamilyCounts: [Int: Int]) -> VocabularyProfile {
         let observedByBand = Dictionary(
             uniqueKeysWithValues: bandStats.map { ($0.band, $0) })
         let allBands = Set(observedByBand.keys).union(bandFamilyCounts.keys).sorted()
@@ -55,8 +65,12 @@ enum VocabularyProfileBuilder {
             let sumBelief = stat?.sumBelief ?? 0
             let meanBelief = observed > 0 ? sumBelief / Double(observed) : 0
             let unobserved = max(0, total - observed)
-            let prior = BKTModel.prior(band: band > 0 ? band : nil, parameters: parameters)
-            let estimated = sumBelief + Double(unobserved) * prior
+
+            var estimated = sumBelief
+            if observed >= minObservedForExtrapolation, unobserved > 0 {
+                let rate = sumBelief / (Double(observed) + rateSmoothing)
+                estimated += Double(unobserved) * rate
+            }
 
             coverage.append(BandCoverage(
                 band: band,

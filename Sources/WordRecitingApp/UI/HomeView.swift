@@ -93,6 +93,11 @@ struct HomeView: View {
                             .font(.system(size: 34, weight: .semibold))
                             .monospacedDigit()
                         Text("个词已会").font(.callout).foregroundStyle(.secondary)
+                        if let level = vm.cefr?.current {
+                            Text("· \(level.label) \(level.title)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
                         if let p = vm.profile {
                             Text("· 估算 \(Int(p.estimatedKnownTotal.rounded())) 个词族")
                                 .font(.caption).foregroundStyle(.tertiary)

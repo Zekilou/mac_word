@@ -45,6 +45,21 @@ final class AnalyticsViewModel {
     /// 最近 30 天复习量。
     private(set) var reviewVolume: [ChartPoint] = []
 
+    // MARK: - 负载预测（三期）
+
+    /// 未来 30 天到期分布（第 0 天 = 今天，含已过期与新卡）。
+    private(set) var forecast: [ForecastDay] = []
+    private(set) var todayLoad = 0
+    private(set) var peakDay: ForecastDay?
+
+    // MARK: - 能力画像（三期）
+
+    private(set) var cefr: CEFRProgress?
+    /// 每日收盘词汇量估算趋势（词族）。
+    private(set) var vocabularyTrend: [ChartPoint] = []
+    /// 掌握度分布趋势（最近 30 天堆叠段）。
+    private(set) var masteryTrend: [ChartSegment] = []
+
     init(world: World) {
         self.world = world
     }
@@ -71,6 +86,8 @@ final class AnalyticsViewModel {
                 bandStats: bandStats, bandFamilyCounts: counts)
             loadMemoryQuality()
             loadBehavior()
+            loadForecast()
+            loadAbility()
             errorMessage = nil
         } catch {
             overview = nil
@@ -110,6 +127,21 @@ final class AnalyticsViewModel {
         reviewVolume = dailyStats.suffix(30).points { Double($0.reviews) }
     }
 
+    /// 负载预测：复习队列内卡片的到期分布。
+    private func loadForecast() {
+        let dueDates = (try? world.graph.queueDueDates()) ?? []
+        forecast = ForecastBuilder.forecast(dueDates: dueDates, days: 30)
+        todayLoad = ForecastBuilder.todayLoad(forecast)
+        peakDay = ForecastBuilder.peak(forecast)
+    }
+
+    /// 能力画像：CEFR 映射 + 词汇量趋势 + 掌握度分布趋势。
+    private func loadAbility() {
+        cefr = profile.map { CEFRMapper.progress(families: $0.estimatedKnownTotal) }
+        vocabularyTrend = dailyStats.points(ifPresent: { $0.estimatedFamilies })
+        masteryTrend = StackedBarBuilder.tierSegments(Array(dailyStats.suffix(30)))
+    }
+
     private func resetAnalytics() {
         reviewRecords = []
         retention = nil
@@ -122,5 +154,11 @@ final class AnalyticsViewModel {
         streak = 0
         hourBins = []
         reviewVolume = []
+        forecast = []
+        todayLoad = 0
+        peakDay = nil
+        cefr = nil
+        vocabularyTrend = []
+        masteryTrend = []
     }
 }

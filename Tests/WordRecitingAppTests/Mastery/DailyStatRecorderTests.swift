@@ -235,4 +235,14 @@ final class DailyStatRecorderTests: XCTestCase {
         XCTAssertTrue(try rebuild(today: day(2026, 1, 1)).isEmpty)
         XCTAssertTrue(try DailyStatRecorder.loadAll(world: world).isEmpty)
     }
+
+    /// 词汇量估算随日快照一起落库（供能力画像的趋势线）。
+    func testEstimatedFamiliesIsPopulated() throws {
+        try seedLemma("L1", band: 2)
+        try insertEvent("e1", lemma: "L1", kind: .markKnown, trust: 1, at: day(2026, 1, 1))
+
+        let stat = try XCTUnwrap(try rebuild(today: day(2026, 1, 1)).last)
+
+        XCTAssertGreaterThan(stat.estimatedFamilies ?? 0, 0.8)
+    }
 }

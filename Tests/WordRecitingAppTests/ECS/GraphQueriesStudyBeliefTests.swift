@@ -91,4 +91,11 @@ final class GraphQueriesStudyBeliefTests: XCTestCase {
 
         XCTAssertEqual(try world.graph.studyStats().dueCount, 0)
     }
+
+    func testQueueDueDatesFollowsSameCutoff() throws {
+        try seedCard(lemmaId: "L1", cardId: "C1", text: "abandon", belief: 0.95)
+        try seedCard(lemmaId: "L2", cardId: "C2", text: "ability", belief: 0.40)
+
+        XCTAssertEqual(try world.graph.queueDueDates().count, 1)
+    }
 }

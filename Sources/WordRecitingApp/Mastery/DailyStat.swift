@@ -22,6 +22,8 @@ struct DailyStat: Codable, Sendable, Equatable {
     let retention: Double?
     /// 词频带（字符串）→ 当天后验 ≥ knownThreshold 的词数。
     let knownByBand: [String: Int]
+    /// 当天收盘时的词汇量估算（词族数，含未观测词按先验外推）；无法估算为 nil。
+    var estimatedFamilies: Double? = nil
 
     /// 有后验的词总数（= known + learning + unknown）。
     var observed: Int { known + learning + unknown }

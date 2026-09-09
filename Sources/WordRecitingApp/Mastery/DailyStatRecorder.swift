@@ -61,6 +61,7 @@ enum DailyStatRecorder {
         var bandByLemma: [EntityID: Int] = [:]
         bandByLemma.reserveCapacity(frequencies.count)
         for (lemmaId, row) in frequencies { bandByLemma[lemmaId] = row.band }
+        let bandFamilyCounts = WordFrequency.bundled?.bandFamilyCounts ?? [:]
 
         var belief: [EntityID: Double] = [:]
         var firstSeen = Set<EntityID>()
@@ -73,6 +74,7 @@ enum DailyStatRecorder {
             let day = dayKey(event.occurredAt, calendar: calendar)
             if let open = currentDay, day != open {
                 byDay[open] = snapshot(day: open, belief: belief, bandByLemma: bandByLemma,
+                                       bandFamilyCounts: bandFamilyCounts,
                                        events: dayEvents, newWords: dayNewWords)
                 dayEvents = 0
                 dayNewWords = 0
@@ -95,6 +97,7 @@ enum DailyStatRecorder {
         }
         if let currentDay {
             byDay[currentDay] = snapshot(day: currentDay, belief: belief, bandByLemma: bandByLemma,
+                                         bandFamilyCounts: bandFamilyCounts,
                                          events: dayEvents, newWords: dayNewWords)
         }
 
@@ -123,7 +126,8 @@ enum DailyStatRecorder {
                 events: base.events, newWords: base.newWords,
                 reviews: review?.reviews ?? 0,
                 retention: review.map { Double($0.passed) / Double($0.reviews) },
-                knownByBand: base.knownByBand)
+                knownByBand: base.knownByBand,
+                estimatedFamilies: base.estimatedFamilies)
         }
 
         for stat in stats {
@@ -141,24 +145,38 @@ enum DailyStatRecorder {
 
     private static func snapshot(day: String, belief: [EntityID: Double],
                                  bandByLemma: [EntityID: Int],
+                                 bandFamilyCounts: [Int: Int],
                                  events: Int, newWords: Int) -> DailyStat {
         var known = 0
         var learning = 0
         var unknown = 0
         var knownByBand: [String: Int] = [:]
+        var observedByBand: [Int: (count: Int, sum: Double)] = [:]
         for (lemmaId, value) in belief {
+            let band = bandByLemma[lemmaId] ?? 0
+            var entry = observedByBand[band] ?? (count: 0, sum: 0)
+            entry.count += 1
+            entry.sum += value
+            observedByBand[band] = entry
+
             if value >= knownThreshold {
                 known += 1
-                knownByBand[String(bandByLemma[lemmaId] ?? 0), default: 0] += 1
+                knownByBand[String(band), default: 0] += 1
             } else if value <= unknownThreshold {
                 unknown += 1
             } else {
                 learning += 1
             }
         }
+        let bandStats = observedByBand.map {
+            BandStat(band: $0.key, observedCount: $0.value.count, sumBelief: $0.value.sum)
+        }
+        let estimated = VocabularyProfileBuilder
+            .build(bandStats: bandStats, bandFamilyCounts: bandFamilyCounts)
+            .estimatedKnownTotal
         return DailyStat(date: day, known: known, learning: learning, unknown: unknown,
                          events: events, newWords: newWords, reviews: 0, retention: nil,
-                         knownByBand: knownByBand)
+                         knownByBand: knownByBand, estimatedFamilies: estimated)
     }
 
     /// 无词事件的日：沿用最近一个已记录日的收盘状态（后验只被词事件改变）。
@@ -168,7 +186,8 @@ enum DailyStatRecorder {
                          known: base?.known ?? 0, learning: base?.learning ?? 0,
                          unknown: base?.unknown ?? 0,
                          events: 0, newWords: 0, reviews: 0, retention: nil,
-                         knownByBand: base?.knownByBand ?? [:])
+                         knownByBand: base?.knownByBand ?? [:],
+                         estimatedFamilies: base?.estimatedFamilies)
     }
 
     private static func dayKey(_ date: Date, calendar: Calendar) -> String {

@@ -47,6 +47,8 @@ struct AnalyticsView: View {
                 Divider()
                 behaviorSection
                 Divider()
+                forecastSection
+                Divider()
                 reviewSection
             }
             .padding(16)
@@ -99,6 +101,9 @@ struct AnalyticsView: View {
             }
             if let p = vm.profile, !p.bands.isEmpty {
                 estimateRow(p)
+                if let cefr = vm.cefr {
+                    cefrCard(cefr)
+                }
                 bandChart(p)
                 coverageHint(p)
                 disclaimer
@@ -106,6 +111,46 @@ struct AnalyticsView: View {
                 Text("还没有可估算的数据。事件积累后这里会按词频带给出词汇量估算。")
                     .font(.caption).foregroundStyle(.secondary).padding(.vertical, 4)
             }
+            if !vm.vocabularyTrend.isEmpty {
+                ChartCard(title: "词汇量趋势", subtitle: "每日收盘估算（词族）") {
+                    AnalyticsLineChart(points: vm.vocabularyTrend,
+                                       valueFormat: { String(format: "%.0f", $0) },
+                                       tint: .accent, height: 140)
+                }
+            }
+            if !vm.masteryTrend.isEmpty {
+                ChartCard(title: "掌握度分布趋势",
+                          subtitle: "最近 \(min(vm.dailyStats.count, 30)) 天") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        AnalyticsBarChart(segments: vm.masteryTrend, stacked: true, height: 140)
+                        ChartSeriesLegend(series: [.known, .learning, .unknown])
+                    }
+                }
+            }
+        }
+    }
+
+    /// CEFR 等级条（参考坐标，非硬标准）。
+    private func cefrCard(_ progress: CEFRProgress) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(progress.current?.label ?? "—")
+                    .font(.system(size: 30, weight: .semibold))
+                Text(progress.current?.title ?? "尚未达到 A1")
+                    .font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                if let next = progress.next {
+                    Text("距 \(next.label) 还差约 \(Int(progress.remainingFamilies.rounded())) 个词族")
+                        .font(.caption).foregroundStyle(.tertiary)
+                } else {
+                    Text("已达最高等级").font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+            AnalyticsLevelBar(segments: [
+                LevelSegment(label: "进度", value: progress.progressToNext, tint: .accent)
+            ], total: 1)
+            Text("CEFR 参照：A1≈500 / A2≈1.5k / B1≈2.5k / B2≈4.5k / C1≈8k / C2≈10k 词族（参考坐标，非硬标准）")
+                .font(.caption2).foregroundStyle(.tertiary)
         }
     }
 
@@ -168,7 +213,7 @@ struct AnalyticsView: View {
     }
 
     private var disclaimer: some View {
-        Text("说明：估算 = 已观测词的后验概率之和 + 未观测词按词频先验外推。\(vm.hasFrequencyTable ? "" : "当前未加载词频表，只统计已观测词。")词频带只是参考坐标，不作硬标准；概率是模型推断值，不是精确测量。")
+        Text("说明：估算 = 已观测词的后验概率之和 + 观测充分的词频带（≥\(VocabularyProfileBuilder.minObservedForExtrapolation) 个）按平滑认识率外推；观测不足的带只统计已观测词。\(vm.hasFrequencyTable ? "" : "当前未加载词频表，只统计已观测词。")词频带只是参考坐标，不作硬标准；概率是模型推断值，不是精确测量。")
             .font(.caption2)
             .foregroundStyle(.tertiary)
             .fixedSize(horizontal: false, vertical: true)
@@ -370,6 +415,40 @@ struct AnalyticsView: View {
                                xLabel: { String(format: "%02d", Int($0.lowerBound)) },
                                tint: .orange, height: 130)
         }
+    }
+
+    // MARK: - 负载预测（三期）
+
+    @ViewBuilder
+    private var forecastSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("负载预测").font(.headline)
+                Text("回答「接下来有多忙」——复习队列内卡片的未来 30 天到期分布")
+                    .font(.caption).foregroundStyle(.tertiary)
+            }
+            if vm.forecast.isEmpty {
+                Text("还没有可预测的卡片。").font(.caption).foregroundStyle(.secondary)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)],
+                          alignment: .leading, spacing: 10) {
+                    statCard("今日负载", "\(vm.todayLoad)", icon: "clock.badge.exclamationmark",
+                             tint: .accentColor)
+                    statCard("峰值日", peakText, icon: "chart.line.uptrend.xyaxis",
+                             tint: .orange)
+                }
+                ChartCard(title: "未来 30 天到期量",
+                          subtitle: "第 1 天 = 今天（含已过期与新卡）") {
+                    AnalyticsSimpleBarChart(points: ForecastBuilder.points(vm.forecast),
+                                            tint: .accent, height: 150)
+                }
+            }
+        }
+    }
+
+    private var peakText: String {
+        guard let peak = vm.peakDay else { return "—" }
+        return "\(peak.date) · \(peak.due)"
     }
 
     // MARK: - 复习表现（词库卡片维度的背诵数据）

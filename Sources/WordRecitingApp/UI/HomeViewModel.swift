@@ -14,6 +14,7 @@ final class HomeViewModel {
     var streak = 0
     var weakLemmas: [WeakLemmaStat] = []
     var profile: VocabularyProfile?
+    var cefr: CEFRProgress?
     var errorMessage: String?
 
     init(world: World) {
@@ -43,6 +44,7 @@ final class HomeViewModel {
             let bandStats = try world.graph.masteryByBand()
             let counts = WordFrequency.bundled?.bandFamilyCounts ?? [:]
             profile = VocabularyProfileBuilder.build(bandStats: bandStats, bandFamilyCounts: counts)
+            cefr = profile.map { CEFRMapper.progress(families: $0.estimatedKnownTotal) }
             errorMessage = nil
         } catch {
             errorMessage = "\(error)"
