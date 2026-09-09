@@ -145,6 +145,17 @@ extension GenerateViewModel {
         persistArticleWordState(token)
     }
 
+    /// 选词器行状态（概率优先）。
+    func pickerState(for card: CardListItem) -> WordMarkState {
+        WordMarkState.from(belief: card.belief, mastery: card.mastery, seenCount: card.seenCount)
+    }
+
+    /// 左键统一动作：标记为不会（立即落库）。
+    func markUnknownArticleWord(_ token: ArticleWordToken) {
+        sessionWordStates[token.lemma] = false
+        persistArticleWordState(token)
+    }
+
     /// 当前生成文章的显示上下文（region id 稳定可复用；剥离流式/完成态前缀）。
     private var currentArticleRegion: RegionRef {
         var key = loadedBodyKey ?? "session"

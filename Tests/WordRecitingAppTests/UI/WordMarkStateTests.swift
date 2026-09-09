@@ -63,4 +63,18 @@ final class WordMarkStateTests: XCTestCase {
         XCTAssertEqual(WordMarkState.knownThreshold, 0.85, accuracy: 0.0001)
         XCTAssertEqual(WordMarkState.unknownThreshold, 0.20, accuracy: 0.0001)
     }
+
+    // MARK: - 图例统一
+
+    func testLegendItemsCoverAllTiers() {
+        let labels = WordMarkState.legendItems.map(\.label)
+        XCTAssertEqual(labels, ["会", "学习中", "不会", "出现过", "未见"])
+    }
+
+    func testLegendColorsComeFromStateColors() {
+        let items = WordMarkState.legendItems
+        XCTAssertEqual(items[0].color, WordMarkState.known.color)
+        XCTAssertEqual(items[1].color, WordMarkState.learning(0.5).color)
+        XCTAssertEqual(items[2].color, WordMarkState.unknown.color)
+    }
 }

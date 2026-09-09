@@ -11,6 +11,9 @@ struct SearchableChecklist<Item: Identifiable>: View {
     let subtitle: (Item) -> String?
     let isSelected: (Item) -> Bool
     let toggle: (Item) -> Void
+    /// 行尾徽章（可选）：返回 (文案, 颜色)；nil = 不显示。
+    /// @ai: `var` 才能进 memberwise init 的默认参数（`let` 带初值会被省略）。
+    var badge: ((Item) -> (text: String, color: Color)?)? = nil
 
     @State private var searchText = ""
 
@@ -62,6 +65,15 @@ struct SearchableChecklist<Item: Identifiable>: View {
                     }
                 }
                 Spacer()
+                if let badge = badge?(item) {
+                    Text(badge.text)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(badge.color)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(badge.color.opacity(0.14))
+                        .clipShape(Capsule())
+                }
             }
             .padding(.vertical, 6)
             .padding(.horizontal, 8)

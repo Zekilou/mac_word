@@ -325,4 +325,26 @@ final class GenerateViewModelTests: XCTestCase {
         XCTAssertEqual(spans[0].lemmaId, "lemma-1")
         XCTAssertFalse(vm.liveSpans.isEmpty)
     }
+
+    // MARK: - 选词器状态徽章
+
+    @MainActor func testPickerStateIsDrivenByBelief() {
+        let vm = makeVM()
+        let card = CardListItem(
+            cardId: "C1", lemmaId: "L1", text: "abandon", definition: nil,
+            dueAt: nil, intervalDays: nil, reps: nil,
+            mastery: 2.0, seenCount: 0, belief: 0.10)
+
+        XCTAssertEqual(vm.pickerState(for: card), .unknown)
+    }
+
+    @MainActor func testPickerStateFallsBackToMastery() {
+        let vm = makeVM()
+        let card = CardListItem(
+            cardId: "C1", lemmaId: "L1", text: "abandon", definition: nil,
+            dueAt: nil, intervalDays: nil, reps: nil,
+            mastery: 2.0, seenCount: 0, belief: nil)
+
+        XCTAssertEqual(vm.pickerState(for: card), .known)
+    }
 }

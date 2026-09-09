@@ -87,15 +87,11 @@ extension GenerateView {
     }
 
     /// 非目标词词块：按掌握度显示状态色（会绿/不会红/学习中渐变/见过蓝/未见灰），点击切换。
-    /// @ai: learning（非极端掌握度）点击先弹确认，确认后走 setArticleWordExtreme；其余直接 toggle。
+    /// @ai: 左键统一标不会（可预测）；改会/不会走右键菜单（可逆操作不用 alert 打断）。
     private func stateWordChip(_ token: ArticleWordToken) -> some View {
         let state = vm.articleMarkState(for: token)
         return Button {
-            if case .learning = state {
-                confirmArticleWord = token
-            } else {
-                vm.toggleArticleWord(token)
-            }
+            vm.markUnknownArticleWord(token)
         } label: {
             Text(token.surface)
                 .font(.body)
@@ -107,16 +103,20 @@ extension GenerateView {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("标为会") { vm.setArticleWordExtreme(token, known: true) }
+            Button("标为不会") { vm.setArticleWordExtreme(token, known: false) }
+        }
         .help(articleWordHelpText(for: state))
     }
 
     private func articleWordHelpText(for state: WordMarkState) -> String {
         switch state {
-        case .known: return "模型认为已会（点击标记为不会）"
-        case .unknown: return "模型认为不会（点击标记为会）"
-        case .learning(let belief): return "\(MasteryPresentation.helpText(belief))；点击需确认后改为两端极值"
-        case .seen: return "出现过未确认，模型尚无概率（点击标记为不会）"
-        case .pending: return "无记录（点击标记为不会）"
+        case .known: return "已会（左键标不会；右键可改）"
+        case .unknown: return "不会（右键可改为会）"
+        case .learning(let belief): return "\(MasteryPresentation.helpText(belief))；左键标不会，右键改极端"
+        case .seen: return "出现过未确认，模型尚无概率（左键标不会）"
+        case .pending: return "无记录（左键标不会）"
         }
     }
 

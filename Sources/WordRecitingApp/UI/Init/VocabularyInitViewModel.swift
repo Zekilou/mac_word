@@ -234,6 +234,11 @@ final class VocabularyInitViewModel {
         sessionStates[word.lemma] = known
     }
 
+    /// 左键统一动作：标不会（写会话覆盖，提交时才落库）。
+    func markUnknown(_ word: InitWord) {
+        sessionStates[word.lemma] = false
+    }
+
     // MARK: - 提交
 
     /// 判断某词本次提交前是否**无记录**（从无到有的新增；有记录只是状态更新不算新增）。

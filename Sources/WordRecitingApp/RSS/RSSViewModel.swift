@@ -218,6 +218,11 @@ final class RSSViewModel {
         }
     }
 
+    /// 左键统一动作：标记为不会（可预测；改会走右键菜单）。
+    func markUnknown(_ word: InitWord) {
+        setExtreme(word, known: false)
+    }
+
     /// 把词直接设置为极端掌握度（会=2 / 不会=1）。
     /// @ai: 用户确认后把"学习中"词落到两端极值；极端词修改无需确认直接走 toggle。
     func setExtreme(_ word: InitWord, known: Bool) {

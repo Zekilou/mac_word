@@ -105,6 +105,14 @@ extension GenerateView {
                                 } else {
                                     vm.pickedLemmaIds.insert(card.lemmaId)
                                 }
+                            },
+                            badge: { card in
+                                let state = vm.pickerState(for: card)
+                                guard state != .pending else { return nil }
+                                if let belief = card.belief {
+                                    return (MasteryPresentation.percentText(belief), state.color)
+                                }
+                                return (state.label, state.color)
                             })
                             .frame(maxHeight: .infinity)
                     }

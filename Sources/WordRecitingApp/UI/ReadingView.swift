@@ -7,8 +7,6 @@ import SwiftUI
 struct ReadingView: View {
     let world: World
     @State private var vm: RSSViewModel
-    /// 待确认的"学习中"词（掌握度非极端，修改需确认）。
-    @State private var confirmWord: InitWord?
 
     init(world: World) {
         self.world = world
@@ -28,20 +26,6 @@ struct ReadingView: View {
             }
         }
         .onAppear { vm.reloadSources() }
-        .alert(
-            "更改掌握度记录？",
-            isPresented: Binding(
-                get: { confirmWord != nil },
-                set: { if !$0 { confirmWord = nil } }
-            ),
-            presenting: confirmWord
-        ) { word in
-            Button("改为会") { vm.setExtreme(word, known: true) }
-            Button("改为不会", role: .destructive) { vm.setExtreme(word, known: false) }
-            Button("取消", role: .cancel) {}
-        } message: { word in
-            Text("「\(word.surface)」已有掌握度记录（学习中），直接修改将重置为两端极值。确定要更改吗？")
-        }
     }
 
     // MARK: - 顶栏：来源切换 + 刷新 + 图例
@@ -84,21 +68,7 @@ struct ReadingView: View {
     }
 
     private var legend: some View {
-        HStack(spacing: 10) {
-            legendChip(.green, "会")
-            legendChip(.red, "不会")
-            legendChip(Color(hue: 120 / 360, saturation: 0.8, brightness: 0.8), "学习中")
-            legendChip(.blue, "出现过")
-            legendChip(.gray, "未见")
-        }
-        .font(.callout)
-    }
-
-    private func legendChip(_ color: Color, _ label: String) -> some View {
-        HStack(spacing: 3) {
-            Circle().fill(color.opacity(0.85)).frame(width: 7, height: 7)
-            Text(label).foregroundStyle(.secondary)
-        }
+        WordMarkLegendView()
     }
 
     // MARK: - 文章列表
@@ -155,7 +125,7 @@ struct ReadingView: View {
                         Text(item.title)
                             .font(.headline)
                         HStack(spacing: 8) {
-                            Text("点击词块标记 会/不会；未点击的词保持「出现过」")
+                            Text("左键标不会 · 右键改会/不会；未点击的词保持「出现过」")
                                 .font(.caption).foregroundStyle(.secondary)
                             Spacer()
                         }
@@ -220,15 +190,11 @@ struct ReadingView: View {
     }
 
     /// 可点击词块：会→绿 / 不会→红 / 学习中→掌握度渐变 / 出现过→蓝 / 未见→极淡灰。
-    /// @ai: learning（非极端掌握度）点击先弹确认，确认后走 setExtreme；极端词直接 toggle。
+    /// @ai: 左键统一标不会（可预测）；改会/不会走右键菜单（可逆操作不用 alert 打断）。
     private func wordChip(_ word: InitWord) -> some View {
         let state = vm.markState(for: word)
         return Button {
-            if case .learning = state {
-                confirmWord = word
-            } else {
-                vm.toggle(word)
-            }
+            vm.markUnknown(word)
         } label: {
             Text(word.surface)
                 .font(.system(size: 16))
@@ -240,16 +206,20 @@ struct ReadingView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("标为会") { vm.setExtreme(word, known: true) }
+            Button("标为不会") { vm.setExtreme(word, known: false) }
+        }
         .help(helpText(for: state))
     }
 
     private func helpText(for state: WordMarkState) -> String {
         switch state {
-        case .known: return "模型认为已会（点击标记为不会）"
-        case .unknown: return "模型认为不会（点击切换为会）"
-        case .learning(let belief): return "\(MasteryPresentation.helpText(belief))；点击需确认后改为两端极值"
-        case .seen: return "出现过未确认，模型尚无概率（点击标记为不会）"
-        case .pending: return "无记录（点击标记为不会）"
+        case .known: return "已会（左键标不会；右键可改）"
+        case .unknown: return "不会（右键可改为会）"
+        case .learning(let belief): return "\(MasteryPresentation.helpText(belief))；左键标不会，右键改极端"
+        case .seen: return "出现过未确认，模型尚无概率（左键标不会）"
+        case .pending: return "未见（左键标不会）"
         }
     }
 

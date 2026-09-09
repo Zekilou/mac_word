@@ -11,8 +11,6 @@ struct GenerateView: View {
     let topInset: CGFloat
     @State var showAdvisor = false
     @State var tappedToken: ArticleWordToken?
-    /// 待确认的"学习中"词（掌握度非极端，修改需确认）。
-    @State var confirmArticleWord: ArticleWordToken?
     /// 列3 选词器展开状态（可收起）。
     @State var showPicker = true
     /// 右侧生成历史（抽屉）展开状态。
@@ -63,20 +61,6 @@ struct GenerateView: View {
         .onAppear {
             vm.loadDecks()
             vm.loadHistory()
-        }
-        .alert(
-            "更改掌握度记录？",
-            isPresented: Binding(
-                get: { confirmArticleWord != nil },
-                set: { if !$0 { confirmArticleWord = nil } }
-            ),
-            presenting: confirmArticleWord
-        ) { token in
-            Button("改为会") { vm.setArticleWordExtreme(token, known: true) }
-            Button("改为不会", role: .destructive) { vm.setArticleWordExtreme(token, known: false) }
-            Button("取消", role: .cancel) {}
-        } message: { token in
-            Text("「\(token.surface)」已有掌握度记录（学习中），直接修改将覆盖为两端极值。确定要更改吗？")
         }
     }
 

@@ -14,8 +14,6 @@ struct VocabularyInitView: View {
     let world: World
     @State private var vm: VocabularyInitViewModel
     @State private var mode: VocabMode = .initFlow
-    /// 待确认的"学习中"词（掌握度非极端，修改需确认）。
-    @State private var confirmWord: InitWord?
 
     init(world: World) {
         self.world = world
@@ -30,20 +28,6 @@ struct VocabularyInitView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .onAppear { vm.refreshOverview() }
-        .alert(
-            "更改掌握度记录？",
-            isPresented: Binding(
-                get: { confirmWord != nil },
-                set: { if !$0 { confirmWord = nil } }
-            ),
-            presenting: confirmWord
-        ) { word in
-            Button("改为会") { vm.setSession(word, known: true) }
-            Button("改为不会", role: .destructive) { vm.setSession(word, known: false) }
-            Button("取消", role: .cancel) {}
-        } message: { word in
-            Text("「\(word.surface)」已有掌握度记录（学习中），直接修改将覆盖为两端极值。确定要更改吗？")
-        }
     }
 
     // MARK: - 顶部：说明 + 掌握度概览 + 次级导航
@@ -199,21 +183,17 @@ struct VocabularyInitView: View {
                 Text("新词 \(vm.newWordCount)").font(.callout).foregroundStyle(Color.accentColor)
             }
             Spacer()
-            Text("点击切换 会/不会：灰→红→再点回灰；记录红点击变绿；学习中词点击需确认")
+            Text("左键标不会 · 右键改会/不会 · 提交时统一落库")
                 .font(.callout).foregroundStyle(.secondary)
         }
     }
 
     /// 可点击词块：已会→绿、不会→红、学习中→掌握度渐变、无记录→极淡灰。
-    /// @ai: learning（非极端掌握度）点击先弹确认，确认后走 setSession；极端词直接 toggle。
+    /// @ai: 左键统一标不会（可预测）；改会/不会走右键菜单（可逆操作不用 alert 打断）。
     private func wordChip(_ word: InitWord) -> some View {
         let state = vm.markState(for: word)
         return Button {
-            if case .learning = state {
-                confirmWord = word
-            } else {
-                vm.toggle(word)
-            }
+            vm.markUnknown(word)
         } label: {
             Text(word.surface)
                 .font(.system(size: 17))
@@ -229,16 +209,20 @@ struct VocabularyInitView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("标为会") { vm.setSession(word, known: true) }
+            Button("标为不会") { vm.setSession(word, known: false) }
+        }
         .help(helpText(for: state))
     }
 
     private func helpText(for state: WordMarkState) -> String {
         switch state {
-        case .known: return "模型认为已会（点击标记为不会）"
-        case .unknown: return "模型认为不会（点击切换为会 / 恢复无记录）"
-        case .learning(let belief): return "\(MasteryPresentation.helpText(belief))；点击需确认后改为两端极值"
-        case .seen: return "出现过未确认，模型尚无概率（点击标记为不会）"
-        case .pending: return "无记录（点击标记为不会）"
+        case .known: return "已会（左键标不会；右键可改）"
+        case .unknown: return "不会（右键可改为会）"
+        case .learning(let belief): return "\(MasteryPresentation.helpText(belief))；左键标不会，右键改极端"
+        case .seen: return "出现过未确认，模型尚无概率（左键标不会）"
+        case .pending: return "无记录（左键标不会）"
         }
     }
 

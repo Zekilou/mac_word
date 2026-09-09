@@ -62,3 +62,23 @@ enum WordMarkState: Equatable {
         }
     }
 }
+
+extension WordMarkState {
+
+    /// 图例项（全应用图例统一从这里取，禁止各页手写颜色）。
+    struct LegendItem: Identifiable, Equatable {
+        var id: String { label }
+        let label: String
+        let color: Color
+    }
+
+    static var legendItems: [LegendItem] {
+        [
+            LegendItem(label: "会", color: WordMarkState.known.color),
+            LegendItem(label: "学习中", color: WordMarkState.learning(0.5).color),
+            LegendItem(label: "不会", color: WordMarkState.unknown.color),
+            LegendItem(label: "出现过", color: WordMarkState.seen.color),
+            LegendItem(label: "未见", color: WordMarkState.pending.color)
+        ]
+    }
+}
