@@ -88,6 +88,18 @@ enum Rating: Int, Sendable, Codable, CaseIterable {
 enum SchedulerID: String, Sendable, Codable, CaseIterable {
     case fsrsV4 = "fsrs-v4"
     case sm2 = "sm-2"
+    /// SM-2 + 词频/概率调制。
+    case sm2Frequency = "sm-2-frequency"
+}
+
+/// 选词打分策略。
+enum WordScoringID: String, Sendable, Codable, CaseIterable {
+    /// 纯随机（复刻旧行为）。
+    case random
+    /// 临界词优先：概率 0.5 附近最该练。
+    case criticalWords = "critical-words"
+    /// 词频分层：按词频带优先。
+    case frequencyTier = "frequency-tier"
 }
 
 // MARK: - DeckSourceKind

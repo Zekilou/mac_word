@@ -42,6 +42,7 @@ struct GeneralSettingsView: View {
     private func label(for sid: SchedulerID) -> String {
         switch sid {
         case .sm2: return "SM-2（当前）"
+        case .sm2Frequency: return "SM-2 + 词频调制"
         case .fsrsV4: return "FSRS v4（开发中）"
         }
     }
