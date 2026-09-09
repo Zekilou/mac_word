@@ -1,43 +1,51 @@
 import SwiftUI
 
-/// 词块显示状态（初始化 / RSS 阅读 / 词表等词块 UI 共用）。
-/// 优先级：会话覆盖 > 全局掌握度（会/不会/学习中）> 出现过（seen）> 未标记。
-/// @ai: 掌握度值域 1(完全不会)~2(完全会)；只有两端极值是"会/不会"，中间值一律"学习中"（显示渐变颜色）。
+/// 词块显示状态（初始化 / RSS / 生成文章 / 词表 / 卡片浏览 / 词典共用）。
+/// **概率主口径**：有 BKT 后验概率时按概率档位判定；没有概率才回退到用户显式标记。
+/// @ai: `.learning` 携带的是**概率（0~1）**，不再是旧的 mastery（1~2）。
 enum WordMarkState: Equatable {
-    /// 已会（极端：mastery ≥ 2，绿）。
+    /// 已会（概率 ≥ knownThreshold，绿）。
     case known
-    /// 不会（极端：mastery ≤ 1，红）。
+    /// 不会（概率 ≤ unknownThreshold，红）。
     case unknown
-    /// 学习中（掌握度在 1~2 之间，显示掌握度对应的渐变颜色）。
+    /// 学习中（携带概率 0~1，琥珀单色）。
     case learning(Double)
-    /// 出现过未确认（蓝）——RSS 等文章自动记录，未判定会/不会。
+    /// 出现过未确认（蓝）——被动看到且模型还没有概率。
     case seen
     /// 无记录未见过（灰，待标记）。
     case pending
 
-    /// 统一状态判定：掌握度（会/不会/学习中）> 出现过（seen）> 无记录。
-    /// 掌握度值域：0/无 = 无记录；1 = 不会；2 = 会；1< m <2 = 学习中。
-    /// 两端极值用容差 0.001 判定（浮点存储偏差）。
-    /// @ai: 各模块（初始化/RSS/词表/分析）必须用此函数判定，保证能力数据口径一致。
+    /// 概率档位阈值（全应用唯一定义处，禁止各页散落魔法数字）。
+    static let knownThreshold = 0.85
+    static let unknownThreshold = 0.20
+
+    /// 概率主口径判定：有后验概率 → 概率档位；无概率 → 回退显式标记。
+    static func from(belief: Double?, mastery: Double?, seenCount: Int) -> WordMarkState {
+        guard let belief else {
+            return from(mastery: mastery, seenCount: seenCount)
+        }
+        if belief >= knownThreshold { return .known }
+        if belief <= unknownThreshold { return .unknown }
+        return .learning(belief)
+    }
+
+    /// 旧口径兜底：用户显式标记（mastery 0/1/2）。仅在模型还没有概率时使用。
     static func from(mastery: Double?, seenCount: Int) -> WordMarkState {
         guard let m = mastery, m > 0 else {
             return seenCount > 0 ? .seen : .pending
         }
         if m >= 1.999 { return .known }
         if m <= 1.001 { return .unknown }
-        return .learning(m)
+        return .learning(m - 1.0)
     }
 
-    /// 词块底色：会→绿 / 不会→红 / 学习中→按掌握度渐变（1 红 → 1.5 黄 → 2 绿）/ 出现过→蓝 / 无记录→灰。
+    /// 词块底色：只表 3 档（会→绿 / 学习中→琥珀 / 不会→红）+ 出现过→蓝 / 无记录→灰。
+    /// @ai: 颜色只表档位，连续概率用数字（`MasteryPresentation.percentText`）表达。
     var color: Color {
         switch self {
         case .known: return .green
         case .unknown: return .red
-        case .learning(let m):
-            // hue 0(红) → 0.166(黄) → 0.333(绿)，按掌握度线性插值
-            let t = min(1, max(0, (m - 1.0)))
-            let hue = t * 120 / 360
-            return Color(hue: hue, saturation: 0.8, brightness: 0.8)
+        case .learning: return .orange
         case .seen: return .blue
         case .pending: return .gray
         }
@@ -48,7 +56,7 @@ enum WordMarkState: Equatable {
         switch self {
         case .known: return "已会"
         case .unknown: return "不会"
-        case .learning(let m): return String(format: "学习中 %.1f", m)
+        case .learning(let belief): return "学习中 \(MasteryPresentation.percentText(belief))"
         case .seen: return "出现过"
         case .pending: return "无记录"
         }

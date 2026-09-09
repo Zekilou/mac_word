@@ -83,6 +83,8 @@ struct CardListItem: Sendable, Equatable, Identifiable {
     let mastery: Double?
     /// 出现过次数（seen_count，RSS 等自动累计）
     let seenCount: Int
+    /// BKT 后验掌握度概率；nil = 尚无事件。
+    var belief: Double? = nil
 }
 
 extension CardListItem {

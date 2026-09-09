@@ -19,12 +19,14 @@ extension GraphQueries {
                 ss.interval_days AS interval_days,
                 ss.reps         AS reps,
                 uk.mastery      AS mastery,
-                uk.seen_count   AS seen_count
+                uk.seen_count   AS seen_count,
+                mb.belief       AS belief
             FROM nodes c
             JOIN edges inst_edge ON inst_edge.src_id = c.id AND inst_edge.rel_type = 'instantiates'
             JOIN comp_text t ON t.entity_id = inst_edge.dst_id
             LEFT JOIN comp_schedule_state ss ON ss.entity_id = c.id
             LEFT JOIN comp_user_known uk ON uk.entity_id = t.entity_id
+            LEFT JOIN comp_mastery_belief mb ON mb.entity_id = t.entity_id
             WHERE c.kind = 'card' AND inst_edge.dst_id = ?
             ORDER BY c.created_at ASC
             LIMIT 1
@@ -39,7 +41,8 @@ extension GraphQueries {
                 intervalDays: row["interval_days"],
                 reps: row["reps"],
                 mastery: row["mastery"],
-                seenCount: row["seen_count"] ?? 0)
+                seenCount: row["seen_count"] ?? 0,
+                belief: row["belief"])
         }
     }
 
@@ -59,12 +62,14 @@ extension GraphQueries {
                 ss.interval_days AS interval_days,
                 ss.reps         AS reps,
                 uk.mastery      AS mastery,
-                uk.seen_count   AS seen_count
+                uk.seen_count   AS seen_count,
+                mb.belief       AS belief
             FROM nodes c
             JOIN edges inst_edge ON inst_edge.src_id = c.id AND inst_edge.rel_type = 'instantiates'
             JOIN comp_text t ON t.entity_id = inst_edge.dst_id
             LEFT JOIN comp_schedule_state ss ON ss.entity_id = c.id
             LEFT JOIN comp_user_known uk ON uk.entity_id = t.entity_id
+            LEFT JOIN comp_mastery_belief mb ON mb.entity_id = t.entity_id
             WHERE c.kind = 'card'
               AND (ss.due_at IS NULL OR ss.due_at <= ?)
               AND (uk.mastery IS NULL OR uk.mastery < ?)
@@ -82,7 +87,8 @@ extension GraphQueries {
                     intervalDays: row["interval_days"],
                     reps: row["reps"],
                     mastery: row["mastery"],
-                    seenCount: row["seen_count"] ?? 0)
+                    seenCount: row["seen_count"] ?? 0,
+                    belief: row["belief"])
             }
         }
     }
