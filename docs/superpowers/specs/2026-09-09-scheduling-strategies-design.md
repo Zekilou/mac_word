@@ -190,7 +190,7 @@ enum SchedulingRegistry {
 | 选词器 UI | 显示当前策略 + 「按策略重选」；随机/临界/词频三选一 |
 | `VocabularyInitGenerator` | `ScoringContext.purpose = .initParagraph` + `bandWindow = 1...3` |
 | `ReadingView` | 高亮用 `threshold`（可选，后续） |
-| 设置页 | 两个下拉：复习策略 / 选词策略；旧 `settings.schedulerID` 映射到 `reviewPolicy` |
+| 设置页 | 两个下拉：复习策略（沿用 `settings.schedulerID`）/ 选词策略（新增 `settings.wordScoringID`） |
 
 ## 7. 落地顺序（每步独立可验证）
 
