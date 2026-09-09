@@ -8,6 +8,7 @@ import Observation
 final class StudyViewModel {
 
     let world: World
+    let settings: AppSettings
 
     var queue: [CardListItem] = []
     var currentIndex = 0
@@ -23,8 +24,9 @@ final class StudyViewModel {
     /// 当前卡的事件摘要，如 "标记不会 1 次 · 出现过 3 次"。
     private(set) var currentEventSummary: String?
 
-    init(world: World) {
+    init(world: World, settings: AppSettings = .shared) {
         self.world = world
+        self.settings = settings
     }
 
     /// 当前卡片。
