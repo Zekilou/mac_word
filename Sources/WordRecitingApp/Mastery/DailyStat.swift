@@ -26,3 +26,20 @@ struct DailyStat: Codable, Sendable, Equatable {
     /// 有后验的词总数（= known + learning + unknown）。
     var observed: Int { known + learning + unknown }
 }
+
+/// 本地自然日键 `yyyy-MM-dd`（`DailyStat.date` 与图表 x 轴共用）。
+enum DayKey {
+    static func string(from date: Date, calendar: Calendar = .current) -> String {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+
+    /// 解析失败返回 nil（格式不是 `yyyy-MM-dd`）。
+    static func date(from key: String, calendar: Calendar = .current) -> Date? {
+        let parts = key.split(separator: "-")
+        guard parts.count == 3,
+              let year = Int(parts[0]), let month = Int(parts[1]), let day = Int(parts[2])
+        else { return nil }
+        return calendar.date(from: DateComponents(year: year, month: month, day: day))
+    }
+}
