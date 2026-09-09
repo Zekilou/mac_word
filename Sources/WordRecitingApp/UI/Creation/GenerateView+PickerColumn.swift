@@ -33,6 +33,12 @@ extension GenerateView {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            Picker("选词策略", selection: $vm.wordScoringID) {
+                ForEach(WordScoringID.allCases, id: \.rawValue) { id in
+                    Text(label(for: id)).tag(id)
+                }
+            }
+            .labelsHidden()
             HStack(spacing: 8) {
                 Text("数量")
                     .font(.caption).foregroundStyle(.secondary)
@@ -44,13 +50,23 @@ extension GenerateView {
                         vm.errorMessage = "当前范围没有可选单词"
                     }
                 } label: {
-                    Label("随机选词", systemImage: "dice")
+                    Label(vm.wordScoringID == .random ? "随机选词" : "按策略选词",
+                          systemImage: vm.wordScoringID == .random ? "dice" : "target")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(vm.selectedDeckId == nil || vm.deckCards.isEmpty)
             }
-            Text("从「\(vm.wordFilter.label)」的词中随机选 \(max(1, vm.randomCount)) 个作为目标词")
+            Text("从「\(vm.wordFilter.label)」的词中按「\(label(for: vm.wordScoringID))」选 \(max(1, vm.randomCount)) 个作为目标词")
                 .font(.caption2).foregroundStyle(.tertiary)
+        }
+    }
+
+    /// 策略中文名（选词器展示）。
+    private func label(for id: WordScoringID) -> String {
+        switch id {
+        case .random: return "随机"
+        case .criticalWords: return "临界词优先"
+        case .frequencyTier: return "词频优先"
         }
     }
 }

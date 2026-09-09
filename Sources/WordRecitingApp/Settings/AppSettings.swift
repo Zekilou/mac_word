@@ -47,6 +47,7 @@ final class AppSettings {
         static let defaultArticleLength = "settings.defaultArticleLength"
         static let defaultWordFilter = "settings.defaultWordFilter"
         static let defaultRandomCount = "settings.defaultRandomCount"
+        static let wordScoringID = "settings.wordScoringID"
         static let appearanceMode = "settings.appearanceMode"
         static let apiConfigs = "settings.apiConfigs"
         static let activeAPIConfigID = "settings.activeAPIConfigID"
@@ -128,6 +129,16 @@ final class AppSettings {
             return sid
         }
         set { defaults.set(newValue.rawValue, forKey: Key.schedulerID) }
+    }
+
+    /// 选词打分策略（默认随机，与升级前一致）。
+    var wordScoringID: WordScoringID {
+        get {
+            guard let raw = defaults.string(forKey: Key.wordScoringID),
+                  let id = WordScoringID(rawValue: raw) else { return .random }
+            return id
+        }
+        set { defaults.set(newValue.rawValue, forKey: Key.wordScoringID) }
     }
 
     // MARK: - 逐词融入验证强度
@@ -356,7 +367,7 @@ final class AppSettings {
                     Key.schedulerID, Key.embeddingVerification,
                     Key.contextWindow, Key.maxOutputTokens,
                     Key.defaultTargetCount, Key.defaultArticleLength,
-                    Key.defaultWordFilter, Key.defaultRandomCount,
+                    Key.defaultWordFilter, Key.defaultRandomCount, Key.wordScoringID,
                     Key.appearanceMode,
                     Key.apiConfigs, Key.activeAPIConfigID,
                     Key.embeddingSource, Key.embeddingModel,

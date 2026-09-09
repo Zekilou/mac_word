@@ -24,6 +24,8 @@ final class GenerateViewModel {
     var wordFilter: WordFilter = .all
     /// 随机选词数量。
     var randomCount: Int = 10
+    /// 选词打分策略（默认随机，与升级前一致）。
+    var wordScoringID: WordScoringID = .random
 
     // MARK: - 输出
 
@@ -135,6 +137,7 @@ final class GenerateViewModel {
         self.settings = settings
         // 启动时从设置读入
         generatorTier = settings.generatorTier
+        wordScoringID = settings.wordScoringID
         let active = settings.activeAPIConfig
         remoteProvider = active.provider
         llmModel = active.model
@@ -149,6 +152,7 @@ final class GenerateViewModel {
         settings.llmModel = llmModel
         settings.llmBaseURL = llmBaseURL
         settings.llmAPIKey = llmAPIKey
+        settings.wordScoringID = wordScoringID
     }
 
     /// 本次生成在全局活动中心的注册 id（进程守护显示用）。
@@ -375,8 +379,8 @@ final class GenerateViewModel {
 
     // MARK: - 随机选词
 
-    /// 从当前词库按筛选条件随机选 randomCount 个词，并入已选集合（不重复）。
-    /// @ai: 纯内存操作，不写库；随机性由 shuffle 提供。
+    /// 从当前词库按筛选条件选 randomCount 个词（按选词策略打分），并入已选集合（不重复）。
+    /// @ai: WordFilter 仍是预过滤（全部/未学过/学过）；打分交给 WordScoringStrategy。
     @discardableResult
     func randomPick() -> [EntityID] {
         guard selectedDeckId != nil else { return [] }
@@ -387,10 +391,25 @@ final class GenerateViewModel {
             case .learned: return (card.reps ?? 0) > 0
             }
         }
-        let count = max(1, randomCount)
-        let picked = pool.shuffled().prefix(count).map(\.lemmaId)
+        guard !pool.isEmpty else { return [] }
+
+        let features: [WordFeatures]
+        do {
+            let byId = try world.graph.wordFeatures(lemmaIds: pool.map(\.lemmaId))
+            features = pool.compactMap { byId[$0.lemmaId] }
+        } catch {
+            errorMessage = "读取词元特征失败：\(error)"
+            return []
+        }
+
+        let picked = WordSelector.top(
+            max(1, randomCount),
+            from: features,
+            strategy: SchedulingRegistry.scoring(wordScoringID),
+            context: ScoringContext(purpose: .articleTargets,
+                                    now: Date(), bandWindow: nil))
         pickedLemmaIds.formUnion(picked)
-        return Array(picked)
+        return picked
     }
 
     /// 解析最终目标词列表：勾选集合 ∪ 手动输入。
