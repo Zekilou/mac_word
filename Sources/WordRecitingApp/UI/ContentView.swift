@@ -6,7 +6,14 @@ import SwiftUI
 struct ContentView: View {
     let world: World
     @State private var zoneCollapsed = false
-    @State private var section: AppSection = .creation
+    @State private var section: AppSection = .home
+
+    /// 一级栏宽度（折叠时仅图标）。
+    private var zoneWidth: CGFloat { zoneCollapsed ? 48 : 150 }
+    /// 二级栏宽度：首页无二级子区 → 收折为 0。
+    private var sectionWidth: CGFloat { section == .home ? 0 : 140 }
+    /// 内容区左侧留白（一级 + 二级）。
+    private var navWidth: CGFloat { zoneWidth + sectionWidth }
 
     var body: some View {
         // 最外层 GeometryReader 捕获真实顶部安全区高度（标题栏带高度），
@@ -20,8 +27,10 @@ struct ContentView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(.regularMaterial)
                 // 列间分割线（替代 HStack Divider，延伸至最顶）
-                vSeparator(offset: zoneCollapsed ? 48 : 150)
-                vSeparator(offset: (zoneCollapsed ? 48 : 150) + 140)
+                vSeparator(offset: zoneWidth)
+                if sectionWidth > 0 {
+                    vSeparator(offset: navWidth)
+                }
                 // 二级导航栏：背景条从窗口最左延伸到二级栏位置（一级宽+二级宽），内容在一级栏右侧
                 sectionSidebar(topInset: topInset)
                 // 左侧一级导航栏浮层：overlay 在二级导航栏之上（Finder 侧边栏质感）
@@ -83,7 +92,7 @@ struct ContentView: View {
         .background(.ultraThinMaterial)
         // 一级浮在二级之上：右侧投影阴影区分层级
         .shadow(color: .black.opacity(0.16), radius: 5, x: 2, y: 0)
-        .frame(width: zoneCollapsed ? 48 : 150, alignment: .topLeading)
+        .frame(width: zoneWidth, alignment: .topLeading)
         .frame(maxHeight: .infinity, alignment: .top)
         .animation(.easeInOut(duration: 0.2), value: zoneCollapsed)
     }
@@ -92,37 +101,44 @@ struct ContentView: View {
 
     /// 二级栏：背景条从窗口最左延伸到二级栏位置（一级宽+二级宽），
     /// 内容（子区导航项）位于一级栏右侧 140 宽内。
+    /// @ai: 首页（`.home`）没有二级子区，`sectionWidth == 0` → 整栏不渲染。
+    @ViewBuilder
     private func sectionSidebar(topInset: CGFloat) -> some View {
-        HStack(spacing: 0) {
-            Color.clear
-                .frame(width: zoneCollapsed ? 48 : 150)
-            VStack(spacing: 2) {
-                ForEach(AppSection.allCases.filter { $0.zone == section.zone }) { s in
-                    SectionRowButton(s: s, selected: section == s) {
-                        section = s
+        if sectionWidth > 0 {
+            HStack(spacing: 0) {
+                Color.clear
+                    .frame(width: zoneWidth)
+                VStack(spacing: 2) {
+                    ForEach(AppSection.allCases.filter { $0.zone == section.zone }) { s in
+                        SectionRowButton(s: s, selected: section == s) {
+                            section = s
+                        }
                     }
+                    Spacer()
                 }
-                Spacer()
+                .padding(8)
+                .frame(width: sectionWidth)
             }
-            .padding(8)
-            .frame(width: 140)
+            .padding(.top, max(topInset, 28))
+            // 轻材质背景：从窗口最左延伸到二级栏位置
+            .background(.ultraThinMaterial)
+            .frame(width: navWidth, alignment: .topLeading)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
-        .padding(.top, max(topInset, 28))
-        // 轻材质背景：从窗口最左延伸到二级栏位置
-        .background(.ultraThinMaterial)
-        .frame(width: (zoneCollapsed ? 48 : 150) + 140, alignment: .topLeading)
-        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     // MARK: - 内容区
 
     /// 内容区：创作页占满全窗（内部横向滚动首项占位 + 模糊）；
-    /// 其余页面由 `inset` 统一包成「列」（ColumnShell 标题头 + 内容）——
+    /// 其余页面由 `appColumn` 统一包成「列」（ColumnShell 标题头 + 内容）——
     /// 内容从导航栏结束处开始、位于标题头下方，不再贴顶。
     @ViewBuilder
     private func contentView(topInset: CGFloat) -> some View {
-        let navWidth = CGFloat(zoneCollapsed ? 48 + 140 : 150 + 140)
+        let navWidth = self.navWidth
         switch section {
+        case .home: appColumn("首页", navWidth, topInset) {
+            HomeView(world: world) { section = $0 }
+        }
         case .creation: CreationView(world: world, navLeadingWidth: navWidth, topInset: topInset)
         case .decks: appColumn("词库", navWidth, topInset) { DeckManagerView(world: world) }
         case .vocabulary: appColumn("词汇", navWidth, topInset) { VocabularyInitView(world: world) }
