@@ -135,14 +135,23 @@ extension GraphQueries {
         }
     }
 
-    /// db 版本：全部复习评分记录（时间升序），供日快照按本地日聚合。
-    func allReviewRatings(_ db: Database) throws -> [ReviewRatingRow] {
+    /// db 版本：全部复习评分明细（时间升序），供日快照 / 保留率 / 遗忘曲线 / 时段分布聚合。
+    func allReviewRecords(_ db: Database) throws -> [ReviewRecord] {
         let rows = try Row.fetchAll(db, sql: """
-            SELECT rated_at, rating FROM comp_review_event
+            SELECT rated_at, rating, elapsed_days, last_ivl, factor FROM comp_review_event
             WHERE rated_at IS NOT NULL AND rating IS NOT NULL
             ORDER BY rated_at ASC, entity_id ASC
             """)
-        return rows.map { ReviewRatingRow(ratedAt: $0["rated_at"], rating: $0["rating"]) }
+        return rows.map {
+            ReviewRecord(ratedAt: $0["rated_at"], rating: $0["rating"],
+                         elapsedDays: $0["elapsed_days"],
+                         lastInterval: $0["last_ivl"], factor: $0["factor"])
+        }
+    }
+
+    /// 便捷版本：自开读事务。
+    func allReviewRecords() throws -> [ReviewRecord] {
+        try database.dbWriter.read { db in try self.allReviewRecords(db) }
     }
 
     /// 学习统计：总词数 / 已学 / 今日到期 / 今日已复习 / 总复习次数 / AGAIN 率。
@@ -196,10 +205,16 @@ struct StudyStats: Sendable, Equatable {
     let againRatio: Double
 }
 
-/// 一次复习评分（日快照按本地日聚合的输入）。
-struct ReviewRatingRow: Sendable, Equatable {
+/// 一次复习评分明细（保留率 / 评分分布 / 遗忘曲线 / 间隔与因子直方图 / 时段分布的输入）。
+struct ReviewRecord: Sendable, Equatable {
     let ratedAt: Date
     let rating: Int
+    /// 距上次复习的天数（首次复习为 0）。
+    let elapsedDays: Double?
+    /// 本次复习前卡片所处的间隔天数。
+    let lastInterval: Double?
+    /// 调度因子（简化 SM-2 的 factor）。
+    let factor: Double?
 }
 
 /// 弱词统计：一个词的学习表现。
@@ -213,5 +228,10 @@ struct WeakLemmaStat: Sendable, Equatable, Identifiable {
     /// AGAIN 比例（0~1）。
     var againRatio: Double {
         reviewCount > 0 ? Double(againCount) / Double(reviewCount) : 0
+    }
+
+    /// 平滑失败率 (again+1)/(reviews+2)：小样本不虚高，用于顽固词排序。
+    var smoothedFailureRate: Double {
+        Double(againCount + 1) / Double(reviewCount + 2)
     }
 }

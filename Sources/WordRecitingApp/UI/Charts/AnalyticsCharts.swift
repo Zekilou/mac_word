@@ -161,6 +161,48 @@ struct AnalyticsBarChart: View {
     }
 }
 
+// MARK: - 单系列柱
+
+/// 单系列柱状图（复习量 / 时段分布等）。
+struct AnalyticsSimpleBarChart: View {
+    let points: [ChartPoint]
+    var tint: ChartTint = .accent
+    var valueFormat: (Double) -> String = { String(format: "%.0f", $0) }
+    var height: CGFloat = 140
+
+    var body: some View {
+        if points.isEmpty {
+            ChartEmptyState()
+        } else {
+            Chart(points) { point in
+                BarMark(x: .value("标签", point.label), y: .value("值", point.value))
+                    .foregroundStyle(tint.color)
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 8)) { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let label = value.as(String.self) {
+                            Text(label).font(.system(size: 9))
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks { value in
+                    AxisGridLine()
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(valueFormat(v)).font(.system(size: 9))
+                        }
+                    }
+                }
+            }
+            .frame(height: height)
+        }
+    }
+}
+
 // MARK: - 直方图
 
 /// 直方图（区间分布，如复习间隔 / 难度因子）。

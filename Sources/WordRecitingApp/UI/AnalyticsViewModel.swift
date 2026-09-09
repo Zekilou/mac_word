@@ -23,6 +23,28 @@ final class AnalyticsViewModel {
     private(set) var frequencyByLemma: [EntityID: GraphQueries.LemmaFrequencyRow] = [:]
     var errorMessage: String?
 
+    // MARK: - 记忆质量（二期）
+
+    /// 复习评分明细（保留率 / 评分分布 / 遗忘曲线 / 直方图 / 时段分布）。
+    private(set) var reviewRecords: [ReviewRecord] = []
+    /// 真实保留率（rating ≥ good 占比）；无复习为 nil。
+    private(set) var retention: Double?
+    private(set) var ratingDistribution: [RetentionBuilder.RatingSlice] = []
+    /// 每日保留率趋势（0~1）。
+    private(set) var retentionTrend: [ChartPoint] = []
+    private(set) var forgettingCurve: [ChartPoint] = []
+    private(set) var intervalBins: [ChartBin] = []
+    private(set) var factorBins: [ChartBin] = []
+
+    // MARK: - 学习行为（二期）
+
+    /// 每日快照（热力图 / 复习量 / 连续天数）。
+    private(set) var dailyStats: [DailyStat] = []
+    private(set) var streak = 0
+    private(set) var hourBins: [ChartBin] = []
+    /// 最近 30 天复习量。
+    private(set) var reviewVolume: [ChartPoint] = []
+
     init(world: World) {
         self.world = world
     }
@@ -47,6 +69,8 @@ final class AnalyticsViewModel {
             hasFrequencyTable = WordFrequency.bundled != nil
             profile = VocabularyProfileBuilder.build(
                 bandStats: bandStats, bandFamilyCounts: counts)
+            loadMemoryQuality()
+            loadBehavior()
             errorMessage = nil
         } catch {
             overview = nil
@@ -55,7 +79,48 @@ final class AnalyticsViewModel {
             frequencyByLemma = [:]
             distribution = nil
             profile = nil
+            resetAnalytics()
             errorMessage = "\(error)"
         }
+    }
+
+    /// 记忆质量：保留率 / 评分分布 / 遗忘曲线 / 间隔与因子直方图。
+    private func loadMemoryQuality() {
+        let records = (try? world.graph.allReviewRecords()) ?? []
+        reviewRecords = records
+        retention = RetentionBuilder.trueRetention(records)
+        ratingDistribution = RetentionBuilder.ratingDistribution(records)
+        forgettingCurve = RetentionBuilder.forgettingCurve(records)
+
+        let intervals = records.compactMap(\.lastInterval)
+        let maxInterval = intervals.max() ?? 0
+        let intervalUpper = max(7, maxInterval.rounded(.up))
+        intervalBins = HistogramBuilder.bins(values: intervals, lowerBound: 0,
+                                             upperBound: intervalUpper, binCount: 10)
+        factorBins = HistogramBuilder.bins(values: records.compactMap(\.factor),
+                                           lowerBound: 1.3, upperBound: 3.3, binCount: 10)
+    }
+
+    /// 学习行为：日快照 / 连续天数 / 时段分布 / 复习量。
+    private func loadBehavior() {
+        dailyStats = (try? DailyStatRecorder.loadAll(world: world)) ?? []
+        streak = StreakCalculator.current(dailyStats, endingOn: Date())
+        hourBins = BehaviorBuilder.hourDistribution(reviewRecords)
+        retentionTrend = dailyStats.points(ifPresent: { $0.retention })
+        reviewVolume = dailyStats.suffix(30).points { Double($0.reviews) }
+    }
+
+    private func resetAnalytics() {
+        reviewRecords = []
+        retention = nil
+        ratingDistribution = []
+        retentionTrend = []
+        forgettingCurve = []
+        intervalBins = []
+        factorBins = []
+        dailyStats = []
+        streak = 0
+        hourBins = []
+        reviewVolume = []
     }
 }

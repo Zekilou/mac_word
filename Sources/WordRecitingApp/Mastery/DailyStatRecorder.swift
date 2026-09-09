@@ -52,7 +52,7 @@ enum DailyStatRecorder {
         let events = try world.graph.allWordEvents(db)
         let frequencies = try world.graph.allLemmaFrequencies(db)
         let regionCounts = try world.graph.distinctRegionCounts(db)
-        let ratings = try world.graph.allReviewRatings(db)
+        let ratings = try world.graph.allReviewRecords(db)
         let today = dayKey(now, calendar: calendar)
 
         try world.registry.deleteNodes(db, kind: .analyticsDay)

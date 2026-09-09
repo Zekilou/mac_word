@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// 分析视图：学习统计卡 + 弱词排行。
-/// @ai: UI 不写 SQL；查询走 vm.reload → GraphQueries。
+/// 分析视图：掌握度 / 词汇量画像 / 记忆质量 / 学习行为 / 复习统计。
+/// @ai: UI 不写 SQL；查询走 vm.reload → GraphQueries。图表只走 `UI/Charts` 的组件。
 struct AnalyticsView: View {
     @State private var vm: AnalyticsViewModel
+    @State private var heatmapMode: HeatmapMode = .reviews
 
     init(world: World) {
         _vm = State(initialValue: AnalyticsViewModel(world: world))
@@ -41,6 +42,10 @@ struct AnalyticsView: View {
                 abilitySection
                 Divider()
                 profileSection
+                Divider()
+                memoryQualitySection
+                Divider()
+                behaviorSection
                 Divider()
                 reviewSection
             }
@@ -169,17 +174,214 @@ struct AnalyticsView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    // MARK: - 记忆质量（二期）
+
+    @ViewBuilder
+    private var memoryQualitySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("记忆质量").font(.headline)
+                Text("回答「记牢了吗」——真实保留率、评分分布、经验遗忘曲线")
+                    .font(.caption).foregroundStyle(.tertiary)
+            }
+            if vm.reviewRecords.isEmpty {
+                Text("还没有复习数据。先背几个词，这里会出现保留率与遗忘曲线。")
+                    .font(.caption).foregroundStyle(.secondary).padding(.vertical, 4)
+            } else {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 12)],
+                          alignment: .leading, spacing: 12) {
+                    retentionCard
+                    ratingCard
+                    forgettingCurveCard
+                    intervalCard
+                    factorCard
+                }
+                leechCard
+            }
+        }
+    }
+
+    private var retentionCard: some View {
+        ChartCard(title: "真实保留率",
+                  subtitle: "通过 = 记得 / 简单 · 目标带 80–90%") {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(vm.retention.map { String(format: "%.0f%%", $0 * 100) } ?? "—")
+                        .font(.system(size: 30, weight: .semibold))
+                        .monospacedDigit()
+                    Text("共 \(vm.reviewRecords.count) 次评分")
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                }
+                AnalyticsLineChart(points: vm.retentionTrend,
+                                   targetBand: 0.8...0.9,
+                                   valueFormat: { String(format: "%.0f%%", $0 * 100) },
+                                   tint: .green, height: 130)
+                Text("按日趋势；浅色带为 80–90% 目标区间")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private var ratingCard: some View {
+        ChartCard(title: "评分分布", subtitle: "固定四档（again / hard / good / easy）") {
+            VStack(spacing: 6) {
+                ForEach(vm.ratingDistribution) { slice in
+                    HStack(spacing: 10) {
+                        Text(slice.label)
+                            .font(.caption2)
+                            .frame(width: 48, alignment: .leading)
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(slice.tint.color.opacity(0.15))
+                                Capsule()
+                                    .fill(slice.tint.color.opacity(0.8))
+                                    .frame(width: geo.size.width * ratingRatio(slice.count))
+                            }
+                        }
+                        .frame(height: 8)
+                        Text("\(slice.count)")
+                            .font(.caption2.weight(.semibold)).monospacedDigit()
+                            .frame(width: 36, alignment: .trailing)
+                    }
+                }
+            }
+        }
+    }
+
+    private func ratingRatio(_ count: Int) -> Double {
+        let maxCount = vm.ratingDistribution.map(\.count).max() ?? 0
+        return maxCount > 0 ? Double(count) / Double(maxCount) : 0
+    }
+
+    private var forgettingCurveCard: some View {
+        ChartCard(title: "经验遗忘曲线",
+                  subtitle: "按「距上次复习天数」分桶的保留率") {
+            AnalyticsLineChart(points: vm.forgettingCurve,
+                               valueFormat: { String(format: "%.0f%%", $0 * 100) },
+                               tint: .orange, height: 130)
+        }
+    }
+
+    private var intervalCard: some View {
+        ChartCard(title: "复习间隔分布", subtitle: "卡片复习前所处的间隔天数") {
+            AnalyticsHistogram(bins: vm.intervalBins,
+                               xLabel: { String(format: "%.1f", $0.lowerBound) },
+                               tint: .blue, height: 120)
+        }
+    }
+
+    private var factorCard: some View {
+        ChartCard(title: "难度因子分布", subtitle: "简化 SM-2 的 factor（越低越难）") {
+            AnalyticsHistogram(bins: vm.factorBins,
+                               xLabel: { String(format: "%.1f", $0.lowerBound) },
+                               tint: .gray, height: 120)
+        }
+    }
+
+    private var leechCard: some View {
+        ChartCard(title: "顽固词", subtitle: "按平滑失败率 (again+1)/(次数+2) 降序") {
+            let rows = Array(vm.weakLemmas
+                .sorted { $0.smoothedFailureRate > $1.smoothedFailureRate }
+                .prefix(5))
+            if rows.isEmpty {
+                ChartEmptyState()
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(rows) { w in weakRow(w) }
+                }
+            }
+        }
+    }
+
+    // MARK: - 学习行为（二期）
+
+    @ViewBuilder
+    private var behaviorSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("学习行为").font(.headline)
+                Text("回答「学得勤吗」——日历热力图、连续天数、复习量与时段分布")
+                    .font(.caption).foregroundStyle(.tertiary)
+            }
+            if vm.dailyStats.isEmpty {
+                Text("还没有学习记录。").font(.caption).foregroundStyle(.secondary)
+            } else {
+                heatmapCard
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 12)],
+                          alignment: .leading, spacing: 12) {
+                    volumeCard
+                    hourCard
+                }
+            }
+        }
+    }
+
+    private var heatmapCard: some View {
+        ChartCard(title: "日历热力图",
+                  subtitle: "\(vm.dailyStats.count) 天有记录 · 当前连续 \(vm.streak) 天") {
+            VStack(alignment: .leading, spacing: 10) {
+                Picker("模式", selection: $heatmapMode) {
+                    ForEach(HeatmapMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: 260)
+                AnalyticsHeatmap(cells: heatmapCells, weeks: heatmapWeeks,
+                                 tint: heatmapTint,
+                                 valueFormat: heatmapValueFormat)
+            }
+        }
+    }
+
+    private var heatmapWeeks: Int { 26 }
+
+    private var heatmapCells: [HeatmapCell] {
+        HeatmapBuilder.grid(
+            values: BehaviorBuilder.heatmapValues(vm.dailyStats, mode: heatmapMode),
+            endingOn: Date(), weeks: heatmapWeeks)
+    }
+
+    private var heatmapTint: ChartTint {
+        switch heatmapMode {
+        case .reviews: return .green
+        case .newWords: return .blue
+        case .retention: return .orange
+        }
+    }
+
+    private var heatmapValueFormat: (Double) -> String {
+        heatmapMode == .retention
+            ? { String(format: "%.0f%%", $0) }
+            : { String(format: "%.0f", $0) }
+    }
+
+    private var volumeCard: some View {
+        ChartCard(title: "复习量", subtitle: "最近 \(vm.reviewVolume.count) 天") {
+            AnalyticsSimpleBarChart(points: vm.reviewVolume, tint: .accent, height: 130)
+        }
+    }
+
+    private var hourCard: some View {
+        ChartCard(title: "时段分布", subtitle: "你通常在几点复习") {
+            AnalyticsHistogram(bins: vm.hourBins,
+                               xLabel: { String(format: "%02d", Int($0.lowerBound)) },
+                               tint: .orange, height: 130)
+        }
+    }
+
     // MARK: - 复习表现（词库卡片维度的背诵数据）
 
     private var reviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("复习表现").font(.headline)
+                Text("复习统计").font(.headline)
                 Text("卡片维度：与上面的词汇画像不是同一层级（这里是背诵调度数据）")
                     .font(.caption).foregroundStyle(.tertiary)
             }
             statGrid
-            weakSection
         }
     }
 
@@ -221,28 +423,7 @@ struct AnalyticsView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(.separator.opacity(0.5), lineWidth: 1))
     }
 
-    // MARK: - 弱词排行
-
-    private var weakSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Text("弱词排行").font(.headline)
-                Text("按不认识比例降序").font(.caption).foregroundStyle(.tertiary)
-            }
-            if vm.weakLemmas.isEmpty {
-                Text("还没有复习数据。先学几个词，再来这里看表现。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 8)
-            } else {
-                VStack(spacing: 6) {
-                    ForEach(vm.weakLemmas) { w in
-                        weakRow(w)
-                    }
-                }
-            }
-        }
-    }
+    // MARK: - 顽固词行
 
     private func weakRow(_ w: WeakLemmaStat) -> some View {
         HStack(spacing: 12) {
