@@ -31,6 +31,7 @@ enum AppSection: String, CaseIterable, Identifiable, Sendable {
     case synonyms = "同义词"
     case rssSources = "RSS 源"
     case analytics = "分析"
+    case dictionary = "词典"
     // 学习
     case creation = "创作"
     case reading = "阅读"
@@ -45,7 +46,7 @@ enum AppSection: String, CaseIterable, Identifiable, Sendable {
 
     var zone: AppZone {
         switch self {
-        case .decks, .vocabulary, .synonyms, .rssSources, .analytics: return .data
+        case .decks, .vocabulary, .synonyms, .rssSources, .analytics, .dictionary: return .data
         case .creation, .reading, .study: return .learning
         case .model, .general, .storage, .display: return .settings
         }
@@ -58,6 +59,7 @@ enum AppSection: String, CaseIterable, Identifiable, Sendable {
         case .synonyms: return "arrow.left.arrow.right"
         case .rssSources: return "dot.radiowaves.left.and.right"
         case .analytics: return "chart.bar"
+        case .dictionary: return "character.book.closed"
         case .creation: return "square.and.pencil"
         case .reading: return "book.closed"
         case .study: return "book"

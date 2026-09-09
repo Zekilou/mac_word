@@ -194,4 +194,24 @@ final class VocabularyListViewModelTests: XCTestCase {
 
         XCTAssertEqual(vm.beliefText(entry), "85%")
     }
+
+    func testFilterIncludesLearning() throws {
+        try seedEntry(lemmaId: "L1", text: "abandon", mastery: 2.0, belief: 0.50)
+
+        let vm = VocabularyListViewModel(world: world)
+        vm.filter = .learning
+
+        XCTAssertEqual(vm.filtered.map(\.lemmaID), ["L1"])
+    }
+
+    func testLearningIsExcludedFromKnownAndUnknownFilters() throws {
+        try seedEntry(lemmaId: "L1", text: "abandon", mastery: 2.0, belief: 0.50)
+
+        let vm = VocabularyListViewModel(world: world)
+        vm.filter = .known
+        XCTAssertTrue(vm.filtered.isEmpty)
+
+        vm.filter = .unknown
+        XCTAssertTrue(vm.filtered.isEmpty)
+    }
 }

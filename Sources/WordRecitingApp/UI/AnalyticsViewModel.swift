@@ -19,10 +19,17 @@ final class AnalyticsViewModel {
     var profile: VocabularyProfile?
     /// 内置词频表是否已加载。
     var hasFrequencyTable = false
+    /// 词频坐标（lemma → 行）。
+    private(set) var frequencyByLemma: [EntityID: GraphQueries.LemmaFrequencyRow] = [:]
     var errorMessage: String?
 
     init(world: World) {
         self.world = world
+    }
+
+    /// 弱词行的词频带（nil = 无坐标）。
+    func band(for stat: WeakLemmaStat) -> Int? {
+        frequencyByLemma[stat.lemmaId]?.band
     }
 
     /// 刷新词汇能力概览 + 复习统计 + 弱词排行。
@@ -31,6 +38,7 @@ final class AnalyticsViewModel {
             overview = try world.graph.masteryOverview()
             stats = try world.graph.studyStats()
             weakLemmas = try world.graph.weakLemmaDetails(limit: 10)
+            frequencyByLemma = (try? world.graph.allLemmaFrequencies()) ?? [:]
             distribution = try world.graph.masteryDistribution(
                 knownThreshold: WordMarkState.knownThreshold,
                 unknownThreshold: WordMarkState.unknownThreshold)
@@ -44,6 +52,7 @@ final class AnalyticsViewModel {
             overview = nil
             stats = nil
             weakLemmas = []
+            frequencyByLemma = [:]
             distribution = nil
             profile = nil
             errorMessage = "\(error)"

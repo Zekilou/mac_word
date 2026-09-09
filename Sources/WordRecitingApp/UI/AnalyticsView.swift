@@ -173,9 +173,10 @@ struct AnalyticsView: View {
 
     private var reviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text("复习表现").font(.headline)
-                Text("词库卡片维度的背诵数据").font(.caption).foregroundStyle(.tertiary)
+                Text("卡片维度：与上面的词汇画像不是同一层级（这里是背诵调度数据）")
+                    .font(.caption).foregroundStyle(.tertiary)
             }
             statGrid
             weakSection
@@ -248,6 +249,10 @@ struct AnalyticsView: View {
             Text(w.text)
                 .font(.body.weight(.medium))
                 .frame(width: 140, alignment: .leading)
+            Text(FrequencyBandPresentation.bandLabel(vm.band(for: w)))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(width: 56, alignment: .leading)
             VStack(alignment: .leading, spacing: 4) {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {

@@ -46,13 +46,21 @@ struct VocabularyInitView: View {
                 overviewChip(value: vm.overview.seen, label: "出现过", color: .blue)
                 overviewChip(value: vm.overview.unmarked, label: "未标记", color: .secondary)
                 Spacer()
-                Picker("", selection: $mode) {
-                    ForEach(VocabMode.allCases) { m in
-                        Text(m.rawValue).tag(m)
+                VStack(alignment: .leading, spacing: 2) {
+                    Picker("", selection: $mode) {
+                        ForEach(VocabMode.allCases) { m in
+                            Text(m.rawValue).tag(m)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(maxWidth: 250)
+                    Text(mode == .initFlow
+                         ? "一次性引导：生成易读段落，标出不认识的词，建立初始掌握度"
+                         : "日常档案：查看、搜索、筛选所有有记录的词")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                 }
-                .pickerStyle(.segmented)
-                .frame(maxWidth: 250)
                 if mode == .initFlow, vm.hasParagraph {
                     Button("重新生成一段") { vm.reset() }
                         .buttonStyle(.borderless)

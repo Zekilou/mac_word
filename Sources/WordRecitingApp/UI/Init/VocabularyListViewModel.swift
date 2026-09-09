@@ -10,6 +10,7 @@ final class VocabularyListViewModel {
     enum Filter: String, CaseIterable, Identifiable {
         case all = "全部"
         case known = "会"
+        case learning = "学习中"
         case unknown = "不会"
         case seen = "出现过"
         var id: String { rawValue }
@@ -44,6 +45,8 @@ final class VocabularyListViewModel {
             switch filter {
             case .all: matchFilter = true
             case .known: matchFilter = state == .known
+            case .learning:
+                if case .learning = state { matchFilter = true } else { matchFilter = false }
             case .unknown: matchFilter = state == .unknown
             case .seen: matchFilter = state == .seen
             }

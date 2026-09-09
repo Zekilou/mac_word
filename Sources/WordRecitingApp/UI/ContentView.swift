@@ -124,29 +124,31 @@ struct ContentView: View {
         let navWidth = CGFloat(zoneCollapsed ? 48 + 140 : 150 + 140)
         switch section {
         case .creation: CreationView(world: world, navLeadingWidth: navWidth, topInset: topInset)
-        case .decks: inset("词库", navWidth, topInset) { DeckManagerView(world: world) }
-        case .vocabulary: inset("词汇", navWidth, topInset) { VocabularyInitView(world: world) }
-        case .synonyms: inset("同义词", navWidth, topInset) { SynonymManagerView(world: world) }
-        case .rssSources: inset("RSS 源", navWidth, topInset) { RSSSourceManagerView() }
-        case .analytics: inset("分析", navWidth, topInset) { AnalyticsView(world: world) }
-        case .reading: inset("阅读", navWidth, topInset) { ReadingView(world: world) }
-        case .study: inset("背诵", navWidth, topInset) { StudyView(world: world) }
-        case .model: inset("模型", navWidth, topInset) { SettingsView() }
-        case .general: inset("通用", navWidth, topInset) { GeneralSettingsView() }
-        case .storage: inset("储存", navWidth, topInset) { StorageSettingsView(world: world) }
-        case .display: inset("显示", navWidth, topInset) { DisplaySettingsView() }
+        case .decks: appColumn("词库", navWidth, topInset) { DeckManagerView(world: world) }
+        case .vocabulary: appColumn("词汇", navWidth, topInset) { VocabularyInitView(world: world) }
+        case .synonyms: appColumn("同义词", navWidth, topInset) { SynonymManagerView(world: world) }
+        case .rssSources: appColumn("RSS 源", navWidth, topInset) { RSSSourceManagerView() }
+        case .analytics: appColumn("分析", navWidth, topInset) { AnalyticsView(world: world) }
+        case .dictionary: appColumn("词典", navWidth, topInset) { SystemDictionaryView(world: world) }
+        case .reading: appColumn("阅读", navWidth, topInset) { ReadingView(world: world) }
+        case .study: appColumn("背诵", navWidth, topInset) { StudyView(world: world) }
+        case .model: appColumn("模型", navWidth, topInset) { SettingsView() }
+        case .general: appColumn("通用", navWidth, topInset) { GeneralSettingsView() }
+        case .storage: appColumn("储存", navWidth, topInset) { StorageSettingsView(world: world) }
+        case .display: appColumn("显示", navWidth, topInset) { DisplaySettingsView() }
         }
     }
 
-    /// 占位包裹：页面包成「列」（ColumnShell 标题头 + 内容），
-    /// 内容从导航栏结束处（navWidth）开始、列头从安全区下沿（topInset）开始，占满剩余区域。
-    private func inset<Content: View>(
-        _ title: String, _ navWidth: CGFloat, _ topInset: CGFloat, @ViewBuilder _ c: () -> Content
+    /// 页面列壳：内容从导航栏结束处开始、列头从安全区下沿开始。
+    /// @ai: 新增页面必须用它包裹，禁止自己算 navWidth / topInset。
+    private func appColumn<Content: View>(
+        _ title: String, _ navWidth: CGFloat, _ topInset: CGFloat,
+        @ViewBuilder _ content: () -> Content
     ) -> some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: navWidth)
             ColumnShell(title: title) {
-                c().frame(maxWidth: .infinity, maxHeight: .infinity)
+                content().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .padding(.top, topInset)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
