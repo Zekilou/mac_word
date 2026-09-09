@@ -39,6 +39,7 @@ enum EventTimelinePresenter {
         case .generate: return "生成文章"
         case .dictionary: return "词典"
         case .initSession: return "词汇初始化"
+        case .legacy: return "旧数据迁移"
         }
     }
 

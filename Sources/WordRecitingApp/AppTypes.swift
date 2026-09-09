@@ -241,6 +241,8 @@ enum RegionKind: String, Sendable, Codable, CaseIterable {
     case dictionary
     /// 词汇初始化会话：用户主动标记。
     case initSession = "init"
+    /// v6 迁移合成的事件所属上下文（旧数据回填，便于识别/回滚）。
+    case legacy
 }
 
 // MARK: - WordEventKind（单次词事件种类）

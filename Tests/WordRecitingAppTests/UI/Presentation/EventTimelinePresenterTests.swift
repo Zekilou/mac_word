@@ -18,6 +18,7 @@ final class EventTimelinePresenterTests: XCTestCase {
         XCTAssertEqual(EventTimelinePresenter.regionLabel("generate"), "生成文章")
         XCTAssertEqual(EventTimelinePresenter.regionLabel("dictionary"), "词典")
         XCTAssertEqual(EventTimelinePresenter.regionLabel("init"), "词汇初始化")
+        XCTAssertEqual(EventTimelinePresenter.regionLabel("legacy"), "旧数据迁移")
         XCTAssertEqual(EventTimelinePresenter.regionLabel("unknown"), "其他")
     }
 

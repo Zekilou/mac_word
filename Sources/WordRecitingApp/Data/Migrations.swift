@@ -4,6 +4,10 @@ import GRDB
 /// 所有 comp_* 表以 entity_id 为 PK + FK → nodes(id) ON DELETE CASCADE。
 /// v1：用户词汇掌握度（全局上下文）+ 多来源释义 + text_a 索引（10 万词级性能）。
 /// v2：掌握度值域迁移（旧 0~1 → 新 1~2，0=无记录/1=不会/2=会）。
+/// v3：`comp_user_known.seen_count`（出现过次数）。
+/// v4：`comp_region` / `comp_word_event` / `comp_lemma_frequency`。
+/// v5：`comp_mastery_belief`（BKT 后验概率）。
+/// v6：旧数据事件回填（mastery / seen_count → 词事件，让 BKT 后验对历史数据有值）。
 enum SchemaMigrator {
     static func migrate(_ writer: some DatabaseWriter) throws {
         var m = DatabaseMigrator()
@@ -103,6 +107,12 @@ enum SchemaMigrator {
             try db.execute(sql: """
                 CREATE INDEX idx_mastery_belief_belief ON comp_mastery_belief(belief)
                 """)
+        }
+        // v6：旧数据事件回填——把 v4 之前产生的 mastery / seen_count 合成为词事件流，
+        // 让 BKT 后验对历史数据也有值（事件挂专用 legacy region，可按 region 回滚）。
+        // @ai: 只写事件；后验由启动时 VocabularyMaintenance.backfillMastery 重算。
+        m.registerMigration("v6_legacy_event_backfill") { db in
+            try LegacyEventBackfill.run(db)
         }
         try m.migrate(writer)
     }

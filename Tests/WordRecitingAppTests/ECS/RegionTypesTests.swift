@@ -10,7 +10,8 @@ final class RegionTypesTests: XCTestCase {
         XCTAssertEqual(RegionKind.generate.rawValue, "generate")
         XCTAssertEqual(RegionKind.dictionary.rawValue, "dictionary")
         XCTAssertEqual(RegionKind.initSession.rawValue, "init")
-        XCTAssertEqual(RegionKind.allCases.count, 5)
+        XCTAssertEqual(RegionKind.legacy.rawValue, "legacy")
+        XCTAssertEqual(RegionKind.allCases.count, 6)
     }
 
     func testWordEventKindRawValues() {
