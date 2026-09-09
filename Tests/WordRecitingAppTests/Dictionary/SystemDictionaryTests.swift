@@ -102,15 +102,17 @@ final class SystemDictionaryTests: XCTestCase {
         await vm.search("abandon")
         XCTAssertEqual(vm.wordState, .pending)
 
-        // 标记会 → 全局掌握度 = 2（词元自动创建，不建卡）
+        // 标记会 → 全局显式掌握度 = 2（词元自动创建，不建卡）。
+        // 概率主口径下，单次 markKnown 事件的后验（≈0.83）尚未到 knownThreshold，故显示「学习中」。
         vm.toggleMark("abandon")
-        XCTAssertEqual(vm.wordState, .known)
         let lemmaID = try XCTUnwrap(try world.graph.findLemmaId(byTextA: "abandon"))
         XCTAssertEqual(try world.graph.lemmaMastery(lemmaId: lemmaID), 2.0)
+        guard case .learning = vm.wordState else {
+            return XCTFail("概率主口径：单次标记会应为 learning，实际 \(vm.wordState)")
+        }
 
-        // 再点 → 标记不会 → 掌握度 = 1
+        // 再点（方向由显式标记决定）→ 标记不会 → 掌握度 = 1
         vm.toggleMark("abandon")
-        XCTAssertEqual(vm.wordState, .unknown)
         XCTAssertEqual(try world.graph.lemmaMastery(lemmaId: lemmaID), 1.0)
     }
 
@@ -129,5 +131,77 @@ final class SystemDictionaryTests: XCTestCase {
         // 查不到的词返回 nil（不崩溃）
         let missing = await service.lookup("zzzzqqqxx")
         XCTAssertNil(missing)
+    }
+
+    // MARK: - 概率主口径 + 词画像
+
+    private func seedProfileLemma() throws {
+        let now = Date()
+        try world.registry.insertNode(id: "L1", kind: .lemma, createdAt: now)
+        try world.registry.upsertComponent(TextComponent(
+            entityId: "L1", textA: "abandon", textB: nil, language: nil))
+        try world.registry.upsertComponent(UserKnownComponent(
+            entityId: "L1", mastery: 2.0, seenCount: 0,
+            source: "init", updatedAt: now))
+        try world.registry.upsertComponent(LemmaFrequencyComponent(
+            entityId: "L1", band: 2, freqRank: 1001, source: "test"))
+        try world.registry.upsertComponent(MasteryBeliefComponent(
+            entityId: "L1", belief: 0.10, opportunities: 4,
+            lastEventAt: now, updatedAt: now, paramsVersion: "bkt-1"))
+        try world.run(RegionSystem(), context: .record(
+            lemmaIds: ["L1"], region: .dictionary(), kind: .lookup,
+            trust: 1.0, detail: nil))
+    }
+
+    @MainActor
+    func testWordStateIsDrivenByBelief() async throws {
+        try seedProfileLemma()
+        let vm = SystemDictionaryViewModel(
+            world: world,
+            lookupOverride: { word in
+                DictionaryEntry(word: word, phonetic: nil,
+                                partOfSpeech: nil, definition: "d")
+            })
+
+        await vm.search("abandon")
+
+        // 用户显式标了「会」，但概率 0.10 → 判定为不会
+        XCTAssertEqual(vm.wordState, .unknown)
+    }
+
+    @MainActor
+    func testProfileLoadsBeliefBandAndEvents() async throws {
+        try seedProfileLemma()
+        let vm = SystemDictionaryViewModel(
+            world: world,
+            lookupOverride: { word in
+                DictionaryEntry(word: word, phonetic: nil,
+                                partOfSpeech: nil, definition: "d")
+            })
+
+        await vm.search("abandon")
+
+        XCTAssertEqual(vm.belief ?? 0, 0.10, accuracy: 0.0001)
+        XCTAssertEqual(vm.frequencyBand, 2)
+        XCTAssertEqual(vm.frequencyRank, 1001)
+        XCTAssertEqual(vm.recentEvents.count, 1)
+        XCTAssertEqual(vm.recentEvents.first?.kindLabel, "查词")
+        XCTAssertEqual(vm.recentEvents.first?.regionLabel, "词典")
+    }
+
+    @MainActor
+    func testProfileClearedForUnknownWord() async throws {
+        let vm = SystemDictionaryViewModel(
+            world: world,
+            lookupOverride: { word in
+                DictionaryEntry(word: word, phonetic: nil,
+                                partOfSpeech: nil, definition: "d")
+            })
+
+        await vm.search("zzzzz")
+
+        XCTAssertNil(vm.belief)
+        XCTAssertNil(vm.frequencyBand)
+        XCTAssertTrue(vm.recentEvents.isEmpty)
     }
 }

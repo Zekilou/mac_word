@@ -17,6 +17,13 @@ final class SystemDictionaryViewModel {
     var phase: Phase = .idle
     var wordState: WordMarkState = .pending
     var lastQuery = ""
+    /// 词画像：BKT 后验概率（nil = 尚无事件）。
+    var belief: Double?
+    /// 词频带 / 全表排名。
+    var frequencyBand: Int?
+    var frequencyRank: Int?
+    /// 最近 5 条词事件（时间倒序）。
+    var recentEvents: [EventTimelineItem] = []
 
     let world: World
     let service: SystemDictionaryService
@@ -75,16 +82,47 @@ final class SystemDictionaryViewModel {
             }
             let seenCounts = (try? world.graph.allLemmaSeenCounts()) ?? [:]
             let seen: Int = lemmaID.flatMap { seenCounts[$0] } ?? 0
-            wordState = WordMarkState.from(mastery: mastery, seenCount: seen)
+            belief = lemmaID.flatMap { try? world.graph.masteryBelief(lemmaId: $0) } ?? nil
+            wordState = WordMarkState.from(belief: belief, mastery: mastery, seenCount: seen)
+            loadProfile(lemmaID: lemmaID)
         } catch {
             wordState = .pending
+            clearProfile()
         }
     }
 
+    /// 词画像：词频坐标 + 最近事件。
+    private func loadProfile(lemmaID: EntityID?) {
+        guard let lemmaID else {
+            clearProfile()
+            return
+        }
+        let frequency = try? world.graph.lemmaFrequency(lemmaId: lemmaID)
+        frequencyBand = frequency?.band
+        frequencyRank = frequency?.freqRank
+
+        let rows = (try? world.graph.wordEvents(lemmaId: lemmaID, limit: 5)) ?? []
+        let regionIDs = Array(Set(rows.map(\.regionId)))
+        let kinds = (try? world.graph.regionKinds(regionIds: regionIDs)) ?? [:]
+        recentEvents = EventTimelinePresenter.items(from: rows, regionKinds: kinds)
+    }
+
+    private func clearProfile() {
+        belief = nil
+        frequencyBand = nil
+        frequencyRank = nil
+        recentEvents = []
+    }
+
     /// 标记会/不会（极端切换）：已会→不会，否则→会。
-    /// @ai: 词元不存在时 batch 自动建 Lemma；不建卡。
+    /// @ai: 方向由**显式标记**（comp_user_known）决定，而非概率状态——按钮写的是显式掌握度；
+    ///      概率只负责展示判定，不能反过来决定按钮写什么。
     func toggleMark(_ word: String) {
-        let known = wordState != .known
+        let lemmaID = try? world.graph.findLemmaId(byTextA: word)
+        let explicitMastery: Double? = lemmaID.flatMap { id in
+            (try? world.graph.lemmaMastery(lemmaId: id)) ?? nil
+        }
+        let known = (explicitMastery ?? 0) < 1.999
         do {
             try world.run(UserKnownSystem(), context:
                 .batch(words: [(word, known)], source: "dictionary"))

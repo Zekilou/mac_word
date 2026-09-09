@@ -108,12 +108,49 @@ struct SystemDictionaryView: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(vm.wordState.color)
-                    .help("当前状态：\(vm.wordState.label)。点击切换 会/不会（写入全局掌握度）")
+                    .help("当前档位：\(vm.wordState.label)（概率优先判定）。点击切换 会/不会（写入全局掌握度）")
                 }
                 // 释义全文
                 Text(entry.definition)
                     .font(.body)
                     .textSelection(.enabled)
+                Divider()
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("词画像").font(.headline)
+                        if let belief = vm.belief {
+                            Text(MasteryPresentation.percentText(belief))
+                                .font(.caption.weight(.semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(vm.wordState.color)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(vm.wordState.color.opacity(0.14))
+                                .clipShape(Capsule())
+                                .help(MasteryPresentation.helpText(belief))
+                        } else {
+                            Text(MasteryPresentation.noDataText)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        Text(FrequencyBandPresentation.bandLabel(vm.frequencyBand))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.primary.opacity(0.06))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                            .help(FrequencyBandPresentation.helpText(
+                                band: vm.frequencyBand, rank: vm.frequencyRank))
+                        Spacer()
+                    }
+                    Text("模型估计掌握度 · 词频坐标 · 最近事件（最多 5 条）")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    EventTimelineView(
+                        items: vm.recentEvents,
+                        emptyText: "这个词还没有事件记录——查词、标记或做题后就会出现")
+                }
                 Divider()
                 Text("数据来源：macOS 系统词典（Dictionary Services）")
                     .font(.caption)

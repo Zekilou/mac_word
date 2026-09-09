@@ -112,11 +112,11 @@ struct CardBrowserView: View {
         .contentShape(Rectangle())
     }
 
-    /// 全局掌握度胶囊：会/不会/学习中/出现过（无记录不显示，避免全库灰点噪音）。
-    /// @ai: 数据唯一（comp_user_known），此处仅做展示打通，不改卡片复习状态。
+    /// 掌握度胶囊：概率优先（无概率回退显式标记）；无记录不显示，避免全库灰点噪音。
     @ViewBuilder
     private func masteryBadge(_ card: CardListItem) -> some View {
-        let state = WordMarkState.from(mastery: card.mastery, seenCount: card.seenCount)
+        let state = WordMarkState.from(
+            belief: card.belief, mastery: card.mastery, seenCount: card.seenCount)
         if state != .pending {
             Text(state.label)
                 .font(.caption2)
@@ -125,8 +125,15 @@ struct CardBrowserView: View {
                 .background(state.color.opacity(0.18))
                 .foregroundStyle(state.color)
                 .clipShape(Capsule())
-                .help("全局掌握度：\(state.label)")
+                .help(badgeHelp(card, state: state))
         }
+    }
+
+    private func badgeHelp(_ card: CardListItem, state: WordMarkState) -> String {
+        if let belief = card.belief {
+            return "\(MasteryPresentation.helpText(belief))；当前档位：\(state.label)"
+        }
+        return "全局掌握度（用户显式标记）：\(state.label)"
     }
 
     // MARK: - 右：详情

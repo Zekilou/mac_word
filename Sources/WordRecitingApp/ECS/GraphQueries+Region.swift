@@ -125,8 +125,22 @@ extension GraphQueries {
         }
     }
 
-    // MARK: - 词频坐标
+    /// 批量查 region id → RegionKind.rawValue（事件时间线展示用）。
+    func regionKinds(regionIds: [EntityID]) throws -> [EntityID: String] {
+        guard !regionIds.isEmpty else { return [:] }
+        return try database.dbWriter.read { db in
+            let placeholders = Array(repeating: "?", count: regionIds.count).joined(separator: ",")
+            let rows = try Row.fetchAll(db, sql: """
+                SELECT entity_id, kind FROM comp_region
+                WHERE entity_id IN (\(placeholders))
+                """, arguments: StatementArguments(regionIds))
+            var result: [EntityID: String] = [:]
+            for row in rows { result[row["entity_id"]] = row["kind"] }
+            return result
+        }
+    }
 
+    // MARK: - 词频坐标
     /// db 版本：某 Lemma 的词频坐标。
     func lemmaFrequency(_ db: Database, lemmaId: EntityID) throws -> LemmaFrequencyRow? {
         guard let row = try Row.fetchOne(db, sql: """
