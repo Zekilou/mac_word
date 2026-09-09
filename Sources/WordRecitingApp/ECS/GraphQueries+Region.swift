@@ -110,6 +110,30 @@ extension GraphQueries {
         }
     }
 
+    /// db 版本：每个 lemma 出现过的不同 region 数（批量，供全量重放一次性取用）。
+    func distinctRegionCounts(_ db: Database) throws -> [EntityID: Int] {
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT lemma_id, COUNT(DISTINCT region_id) AS n
+            FROM comp_word_event
+            GROUP BY lemma_id
+            """)
+        var result: [EntityID: Int] = [:]
+        result.reserveCapacity(rows.count)
+        for row in rows { result[row["lemma_id"]] = row["n"] }
+        return result
+    }
+
+    /// db 版本：全量词事件（时间升序，entity_id 次序稳定）。
+    /// @ai: 日快照回放器用此方法单遍遍历，禁止在业务代码里手写 ORDER BY。
+    func allWordEvents(_ db: Database) throws -> [WordEventRow] {
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT entity_id, lemma_id, region_id, event_kind, trust, occurred_at
+            FROM comp_word_event
+            ORDER BY occurred_at ASC, entity_id ASC
+            """)
+        return rows.map(Self.makeEventRow)
+    }
+
     // MARK: - Region
 
     func region(regionId: EntityID) throws -> RegionRow? {
@@ -160,16 +184,21 @@ extension GraphQueries {
     /// 全部词频坐标（批量，供列表展示）。
     func allLemmaFrequencies() throws -> [EntityID: LemmaFrequencyRow] {
         try database.dbWriter.read { db in
-            let rows = try Row.fetchAll(db, sql: """
-                SELECT entity_id, band, freq_rank, source FROM comp_lemma_frequency
-                """)
-            var result: [EntityID: LemmaFrequencyRow] = [:]
-            for row in rows {
-                result[row["entity_id"]] = LemmaFrequencyRow(
-                    band: row["band"], freqRank: row["freq_rank"], source: row["source"])
-            }
-            return result
+            try self.allLemmaFrequencies(db)
         }
+    }
+
+    /// db 版本：全部词频坐标（批量，供全量重放一次性取用）。
+    func allLemmaFrequencies(_ db: Database) throws -> [EntityID: LemmaFrequencyRow] {
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT entity_id, band, freq_rank, source FROM comp_lemma_frequency
+            """)
+        var result: [EntityID: LemmaFrequencyRow] = [:]
+        for row in rows {
+            result[row["entity_id"]] = LemmaFrequencyRow(
+                band: row["band"], freqRank: row["freq_rank"], source: row["source"])
+        }
+        return result
     }
 
     private static func makeEventRow(_ row: Row) -> WordEventRow {

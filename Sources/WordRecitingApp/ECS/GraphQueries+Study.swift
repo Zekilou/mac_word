@@ -131,6 +131,16 @@ extension GraphQueries {
         }
     }
 
+    /// db 版本：全部复习评分记录（时间升序），供日快照按本地日聚合。
+    func allReviewRatings(_ db: Database) throws -> [ReviewRatingRow] {
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT rated_at, rating FROM comp_review_event
+            WHERE rated_at IS NOT NULL AND rating IS NOT NULL
+            ORDER BY rated_at ASC, entity_id ASC
+            """)
+        return rows.map { ReviewRatingRow(ratedAt: $0["rated_at"], rating: $0["rating"]) }
+    }
+
     /// 学习统计：总词数 / 已学 / 今日到期 / 今日已复习 / 总复习次数 / AGAIN 率。
     func studyStats(now: Date = Date()) throws -> StudyStats {
         try database.dbWriter.read { db in
@@ -178,6 +188,12 @@ struct StudyStats: Sendable, Equatable {
     let reviewedToday: Int
     let totalReviews: Int
     let againRatio: Double
+}
+
+/// 一次复习评分（日快照按本地日聚合的输入）。
+struct ReviewRatingRow: Sendable, Equatable {
+    let ratedAt: Date
+    let rating: Int
 }
 
 /// 弱词统计：一个词的学习表现。

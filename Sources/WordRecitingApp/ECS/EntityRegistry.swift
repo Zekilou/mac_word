@@ -67,6 +67,12 @@ final class EntityRegistry: @unchecked Sendable {
         try db.execute(sql: "DELETE FROM nodes WHERE id = ?", arguments: [id])
     }
 
+    /// 删除某一类节点的全部行（CASCADE 自动清组件与 edges）（在传入事务内）。
+    /// @ai: 全量重算型维护任务用它先清空再写入（如每日快照）。
+    func deleteNodes(_ db: Database, kind: NodeKind) throws {
+        try db.execute(sql: "DELETE FROM nodes WHERE kind = ?", arguments: [kind.rawValue])
+    }
+
     // MARK: - Edge（db 版本）
 
     /// 向 edges 表插入一行，同时插入 kind=edge 的 node（edges.id FK → nodes.id）。

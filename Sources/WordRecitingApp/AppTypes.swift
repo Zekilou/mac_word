@@ -19,6 +19,8 @@ enum NodeKind: String, Sendable, Codable, CaseIterable {
     case edge
     /// 一次「显示词汇的上下文」（页面/会话级）。
     case region
+    /// 每日统计快照节点（趋势数据源，载荷存 comp_analytics_cache）。
+    case analyticsDay = "analytics_day"
 }
 
 // MARK: - EdgeRel
