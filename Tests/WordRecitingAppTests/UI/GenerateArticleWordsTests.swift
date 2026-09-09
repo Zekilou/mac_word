@@ -181,4 +181,27 @@ final class GenerateArticleWordsTests: XCTestCase {
         }
         XCTAssertEqual(count, 1)
     }
+
+    // MARK: - 概率主口径
+
+    @MainActor func testArticleMarkStateIsDrivenByBelief() throws {
+        let vm = makeVM()
+        try world.registry.insertNode(id: "L1", kind: .lemma, createdAt: Date())
+        try world.registry.upsertComponent(TextComponent(
+            entityId: "L1", textA: "abandon", textB: nil, language: nil))
+        try world.registry.upsertComponent(UserKnownComponent(
+            entityId: "L1", mastery: 2.0, seenCount: 0,
+            source: "reading", updatedAt: Date()))
+        try world.registry.upsertComponent(MasteryBeliefComponent(
+            entityId: "L1", belief: 0.1, opportunities: 3,
+            lastEventAt: nil, updatedAt: Date(), paramsVersion: "bkt-1"))
+
+        vm.loadWordMastery()
+        // 非目标词才走全局状态判定（目标词固定 .pending）
+        let token = ArticleWordToken(
+            id: 0, surface: "abandon", lemma: "abandon",
+            start: 0, end: 7, isTarget: false, lemmaId: "L1")
+
+        XCTAssertEqual(vm.articleMarkState(for: token), .unknown)
+    }
 }

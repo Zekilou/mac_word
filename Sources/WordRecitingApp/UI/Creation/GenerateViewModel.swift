@@ -51,6 +51,8 @@ final class GenerateViewModel {
     var masteryByLemma: [String: Double] = [:]
     /// 出现过次数（lemma → seen_count）。
     var seenByLemma: [String: Int] = [:]
+    /// BKT 后验概率（lemma → 概率）：判定主口径。
+    var beliefByLemma: [String: Double] = [:]
     /// 已加载文章的 body 标识（ensureArticleWords 守卫：body 相同则零副作用返回，防重绘重入/每帧 SQL）。
     var loadedBodyKey: String?
     /// 词形 → lemmaId 缓存（预解析一次，渲染路径零 SQL；articleMarkState 惰性兜底）。

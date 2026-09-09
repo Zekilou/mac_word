@@ -127,10 +127,13 @@ final class RSSViewModelTests: XCTestCase {
         let lemmaId = try XCTUnwrap(world.graph.findLemmaId(byTextA: "weather"))
         XCTAssertEqual(try world.graph.lemmaMastery(lemmaId: lemmaId), 1.0)
 
-        // 红点击 → 绿（会）
+        // 红点击 → 全局显式标记「会」；但概率主口径下模型重放事件流
+        //（seen + 不会 + 会）后验仍在中间区间，故显示为「学习中」而非「已会」。
         vm.toggle(weather)
-        XCTAssertEqual(vm.markState(for: weather), .known)
         XCTAssertEqual(try world.graph.lemmaMastery(lemmaId: lemmaId), 2.0)
+        guard case .learning = vm.markState(for: weather) else {
+            return XCTFail("冲突信号后应为 learning，实际 \(vm.markState(for: weather))")
+        }
     }
 
     // MARK: - 只有摘要的源 → 抓原文提取正文
@@ -212,6 +215,25 @@ final class RSSViewModelTests: XCTestCase {
 
         let weather = try XCTUnwrap(vm.words.first { $0.lemma == "weather" })
         XCTAssertEqual(vm.markState(for: weather), .known, "已有会记录保持绿")
+    }
+
+    // MARK: - 概率主口径
+
+    func testMarkStateIsDrivenByBelief() throws {
+        try world.registry.insertNode(id: "L1", kind: .lemma, createdAt: Date())
+        try world.registry.upsertComponent(TextComponent(
+            entityId: "L1", textA: "abandon", textB: nil, language: nil))
+        try world.registry.upsertComponent(UserKnownComponent(
+            entityId: "L1", mastery: 2.0, seenCount: 0,
+            source: "rss", updatedAt: Date()))
+        try world.registry.upsertComponent(MasteryBeliefComponent(
+            entityId: "L1", belief: 0.1, opportunities: 3,
+            lastEventAt: nil, updatedAt: Date(), paramsVersion: "bkt-1"))
+
+        let vm = RSSViewModel(world: world)
+        vm.reloadStates()
+
+        XCTAssertEqual(vm.markState(for: InitWord(surface: "abandon", lemma: "abandon")), .unknown)
     }
 }
 

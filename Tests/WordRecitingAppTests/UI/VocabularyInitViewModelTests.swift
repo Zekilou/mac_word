@@ -319,4 +319,39 @@ final class VocabularyInitViewModelTests: XCTestCase {
     private func graphMastery(_ lemmaId: EntityID) throws -> Double? {
         try world.graph.lemmaMastery(lemmaId: lemmaId)
     }
+
+    // MARK: - 概率主口径
+
+    func testMarkStateIsDrivenByBelief() throws {
+        try world.registry.insertNode(id: "L1", kind: .lemma, createdAt: Date())
+        try world.registry.upsertComponent(TextComponent(
+            entityId: "L1", textA: "abandon", textB: nil, language: nil))
+        try world.registry.upsertComponent(UserKnownComponent(
+            entityId: "L1", mastery: 2.0, seenCount: 0,
+            source: "init", updatedAt: Date()))
+        try world.registry.upsertComponent(MasteryBeliefComponent(
+            entityId: "L1", belief: 0.1, opportunities: 3,
+            lastEventAt: nil, updatedAt: Date(), paramsVersion: "bkt-1"))
+
+        let vm = VocabularyInitViewModel(world: world)
+        vm.loadMastery()
+
+        let word = InitWord(surface: "abandon", lemma: "abandon")
+        XCTAssertEqual(vm.markState(for: word), .unknown)
+    }
+
+    func testMarkStateFallsBackToMasteryWithoutBelief() throws {
+        try world.registry.insertNode(id: "L1", kind: .lemma, createdAt: Date())
+        try world.registry.upsertComponent(TextComponent(
+            entityId: "L1", textA: "abandon", textB: nil, language: nil))
+        try world.registry.upsertComponent(UserKnownComponent(
+            entityId: "L1", mastery: 2.0, seenCount: 0,
+            source: "init", updatedAt: Date()))
+
+        let vm = VocabularyInitViewModel(world: world)
+        vm.loadMastery()
+
+        let word = InitWord(surface: "abandon", lemma: "abandon")
+        XCTAssertEqual(vm.markState(for: word), .known)
+    }
 }

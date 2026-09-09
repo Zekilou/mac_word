@@ -39,6 +39,8 @@ final class VocabularyInitViewModel {
     private(set) var masteryByLemma: [String: Double] = [:]
     /// 出现过次数（lemma → seen_count）：RSS 等文章自动记录，未判定会/不会 → 蓝色。
     private(set) var seenByLemma: [String: Int] = [:]
+    /// BKT 后验概率（lemma → 概率）：判定主口径。
+    private(set) var beliefByLemma: [String: Double] = [:]
 
     // MARK: - 依赖
 
@@ -87,6 +89,7 @@ final class VocabularyInitViewModel {
             return .pending
         }
         return WordMarkState.from(
+            belief: beliefByLemma[lemmaId],
             mastery: masteryByLemma[lemmaId],
             seenCount: seenByLemma[lemmaId] ?? 0)
     }
@@ -104,6 +107,7 @@ final class VocabularyInitViewModel {
     func loadMastery() {
         masteryByLemma = (try? world.graph.knownLemmaMastery()) ?? [:]
         seenByLemma = (try? world.graph.allLemmaSeenCounts()) ?? [:]
+        beliefByLemma = (try? world.graph.allMasteryBeliefs()) ?? [:]
     }
 
     // MARK: - 生成

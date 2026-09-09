@@ -76,6 +76,7 @@ extension GenerateViewModel {
     func loadWordMastery() {
         masteryByLemma = (try? world.graph.knownLemmaMastery()) ?? [:]
         seenByLemma = (try? world.graph.allLemmaSeenCounts()) ?? [:]
+        beliefByLemma = (try? world.graph.allMasteryBeliefs()) ?? [:]
     }
 
     /// 预解析全部非目标词的 lemmaId 到缓存（一次批量反查；span 自带 id 的词直接复用）。
@@ -105,6 +106,7 @@ extension GenerateViewModel {
         let lemmaId = lemmaIdByWord[token.lemma] ?? lazyResolveLemmaId(token)
         guard let lemmaId else { return .pending }
         return WordMarkState.from(
+            belief: beliefByLemma[lemmaId],
             mastery: masteryByLemma[lemmaId],
             seenCount: seenByLemma[lemmaId] ?? 0)
     }

@@ -234,10 +234,10 @@ struct VocabularyInitView: View {
 
     private func helpText(for state: WordMarkState) -> String {
         switch state {
-        case .known: return "已会（点击标记为不会）"
-        case .unknown: return "不会（点击切换为会 / 恢复无记录）"
-        case .learning: return "学习中（有掌握度记录，点击需确认后改为两端极值）"
-        case .seen: return "出现过未确认（点击标记为不会）"
+        case .known: return "模型认为已会（点击标记为不会）"
+        case .unknown: return "模型认为不会（点击切换为会 / 恢复无记录）"
+        case .learning(let belief): return "\(MasteryPresentation.helpText(belief))；点击需确认后改为两端极值"
+        case .seen: return "出现过未确认，模型尚无概率（点击标记为不会）"
         case .pending: return "无记录（点击标记为不会）"
         }
     }

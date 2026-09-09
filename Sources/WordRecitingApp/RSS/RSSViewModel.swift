@@ -31,6 +31,8 @@ final class RSSViewModel {
 
     private(set) var masteryByLemma: [String: Double] = [:]
     private(set) var seenByLemma: [String: Int] = [:]
+    /// BKT 后验概率（lemma → 概率）：判定主口径。
+    private(set) var beliefByLemma: [String: Double] = [:]
 
     // MARK: - 测试注入
 
@@ -174,6 +176,7 @@ final class RSSViewModel {
     func reloadStates() {
         masteryByLemma = (try? world.graph.knownLemmaMastery()) ?? [:]
         seenByLemma = (try? world.graph.allLemmaSeenCounts()) ?? [:]
+        beliefByLemma = (try? world.graph.allMasteryBeliefs()) ?? [:]
     }
 
     /// 词块状态：全局掌握度（会/不会）> 出现过（seen 蓝）> 无记录（灰）。
@@ -183,6 +186,7 @@ final class RSSViewModel {
             return .pending
         }
         return WordMarkState.from(
+            belief: beliefByLemma[lemmaId],
             mastery: masteryByLemma[lemmaId],
             seenCount: seenByLemma[lemmaId] ?? 0)
     }
