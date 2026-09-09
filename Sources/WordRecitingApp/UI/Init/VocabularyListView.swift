@@ -116,22 +116,19 @@ struct VocabularyListView: View {
                         Text("来源 \(src)").font(.caption2).foregroundStyle(.tertiary)
                     }
                     Spacer()
-                    if e.mastery > 0 {
-                        Text(String(format: "%.1f", e.mastery))
-                            .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                    if let belief = e.belief {
+                        Text(MasteryPresentation.percentText(belief))
+                            .font(.caption).monospacedDigit()
+                            .foregroundStyle(state.color)
+                            .help(MasteryPresentation.helpText(belief))
                     }
-                    if let beliefText = vm.beliefText(e) {
-                        Text(beliefText)
-                            .font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                            .help("模型估计掌握度（BKT 后验概率，随事件更新）")
-                    }
-                    // 阅读频次：读过的内容中累计出现次数（RSS 等自动累计）
+                    // 上下文多样性 + 事件数（取代旧的「阅读频次」）
                     HStack(spacing: 3) {
-                        Image(systemName: "eye")
-                        Text("\(e.seenCount) 次")
+                        Image(systemName: "square.grid.2x2")
+                        Text("\(e.contextCount) 个上下文 · \(e.eventCount) 次事件")
                     }
                     .font(.caption2).foregroundStyle(.secondary)
-                    .help("阅读频次：在已读文章/段落中累计出现 \(e.seenCount) 次")
+                    .help("上下文多样性：在复习/阅读/词典等不同场景出现过 \(e.contextCount) 个，累计 \(e.eventCount) 次事件。CD 研究表明多样性比单纯频次更能预测学习。")
                 }
                 if let def = e.definition, !def.isEmpty {
                     Text(def).font(.callout).foregroundStyle(.secondary).lineLimit(2)

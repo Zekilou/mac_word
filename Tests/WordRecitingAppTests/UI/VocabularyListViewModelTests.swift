@@ -123,4 +123,75 @@ final class VocabularyListViewModelTests: XCTestCase {
         let entry = try XCTUnwrap(vm.entries.first)
         XCTAssertNil(vm.beliefText(entry))
     }
+
+    // MARK: - 概率主口径改造
+
+    private func seedEntry(lemmaId: String, text: String, mastery: Double?,
+                           belief: Double?, seenCount: Int = 1) throws {
+        try world.registry.insertNode(id: lemmaId, kind: .lemma, createdAt: Date())
+        try world.registry.upsertComponent(TextComponent(
+            entityId: lemmaId, textA: text, textB: nil, language: nil))
+        try world.registry.upsertComponent(UserKnownComponent(
+            entityId: lemmaId, mastery: mastery ?? 0, seenCount: seenCount,
+            source: "init", updatedAt: Date()))
+        if let belief {
+            try world.registry.upsertComponent(MasteryBeliefComponent(
+                entityId: lemmaId, belief: belief, opportunities: 3,
+                lastEventAt: nil, updatedAt: Date(), paramsVersion: "bkt-1"))
+        }
+    }
+
+    /// 用户标了「会」，但模型概率低 → 判定以概率为准。
+    func testStateIsDrivenByBeliefNotMastery() throws {
+        try seedEntry(lemmaId: "L1", text: "abandon", mastery: 2.0, belief: 0.12)
+
+        let vm = VocabularyListViewModel(world: world)
+        let entry = try XCTUnwrap(vm.entries.first)
+
+        XCTAssertEqual(vm.markState(entry), .unknown)
+    }
+
+    func testStateFallsBackToMasteryWithoutBelief() throws {
+        try seedEntry(lemmaId: "L1", text: "abandon", mastery: 2.0, belief: nil)
+
+        let vm = VocabularyListViewModel(world: world)
+        let entry = try XCTUnwrap(vm.entries.first)
+
+        XCTAssertEqual(vm.markState(entry), .known)
+    }
+
+    func testContextAndEventCountsAreLoaded() throws {
+        try seedEntry(lemmaId: "L1", text: "abandon", mastery: 2.0, belief: 0.8)
+        try world.run(RegionSystem(), context: .record(
+            lemmaIds: ["L1"], region: .dictionary(), kind: .lookup, trust: 1.0, detail: nil))
+        try world.run(RegionSystem(), context: .record(
+            lemmaIds: ["L1"], region: .rss(articleId: "A1", title: nil),
+            kind: .seen, trust: 0.0, detail: nil))
+
+        let vm = VocabularyListViewModel(world: world)
+        let entry = try XCTUnwrap(vm.entries.first)
+
+        XCTAssertEqual(entry.contextCount, 2)
+        XCTAssertEqual(entry.eventCount, 2)
+    }
+
+    func testSortByMasteryDescending() throws {
+        try seedEntry(lemmaId: "L1", text: "low", mastery: 2.0, belief: 0.2)
+        try seedEntry(lemmaId: "L2", text: "high", mastery: 2.0, belief: 0.9)
+        try seedEntry(lemmaId: "L3", text: "none", mastery: 2.0, belief: nil)
+
+        let vm = VocabularyListViewModel(world: world)
+        vm.sortOrder = .mastery
+
+        XCTAssertEqual(vm.filtered.map(\.lemmaID), ["L2", "L1", "L3"])
+    }
+
+    func testBeliefTextUsesPercentPresentation() throws {
+        try seedEntry(lemmaId: "L1", text: "abandon", mastery: 2.0, belief: 0.847)
+
+        let vm = VocabularyListViewModel(world: world)
+        let entry = try XCTUnwrap(vm.entries.first)
+
+        XCTAssertEqual(vm.beliefText(entry), "85%")
+    }
 }

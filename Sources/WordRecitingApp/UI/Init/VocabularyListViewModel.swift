@@ -15,11 +15,12 @@ final class VocabularyListViewModel {
         var id: String { rawValue }
     }
 
-    /// 词表排序：最近更新 / 阅读频次高→低 / 低→高。
+    /// 词表排序：最近更新 / 阅读频次高→低 / 低→高 / 掌握度高→低。
     enum SortOrder: String, CaseIterable, Identifiable {
         case recent = "最近更新"
         case frequent = "阅读多→少"
         case rare = "阅读少→多"
+        case mastery = "掌握度高→低"
         var id: String { rawValue }
     }
 
@@ -38,7 +39,7 @@ final class VocabularyListViewModel {
     /// 按筛选 + 搜索 + 排序后的条目。
     var filtered: [GraphQueries.RecordedLemma] {
         let base = entries.filter { e in
-            let state = state(of: e)
+            let state = markState(e)
             let matchFilter: Bool
             switch filter {
             case .all: matchFilter = true
@@ -59,6 +60,8 @@ final class VocabularyListViewModel {
             return base.sorted { $0.seenCount > $1.seenCount }
         case .rare:
             return base.sorted { $0.seenCount < $1.seenCount }
+        case .mastery:
+            return base.sorted { ($0.belief ?? -1) > ($1.belief ?? -1) }
         }
     }
 
@@ -66,7 +69,7 @@ final class VocabularyListViewModel {
     var countByState: (known: Int, unknown: Int, learning: Int, seen: Int) {
         var known = 0, unknown = 0, learning = 0, seen = 0
         for e in entries {
-            switch state(of: e) {
+            switch markState(e) {
             case .known: known += 1
             case .unknown: unknown += 1
             case .learning: learning += 1
@@ -87,10 +90,10 @@ final class VocabularyListViewModel {
         }
     }
 
-    /// BKT 后验掌握度百分比文本（如 "85%"）；无后验返回 nil。
+    /// 概率百分比文案（nil = 尚无模型数据）。
     func beliefText(_ e: GraphQueries.RecordedLemma) -> String? {
         guard let belief = e.belief else { return nil }
-        return "\(Int((belief * 100).rounded()))%"
+        return MasteryPresentation.percentText(belief)
     }
 
     /// 清洗词面显示（剥音标 / 词性尾巴）。
@@ -99,9 +102,10 @@ final class VocabularyListViewModel {
         return cleaned.isEmpty ? e.text : cleaned
     }
 
-    /// 统一状态判定（有 mastery 才判会/不会，否则 seen / 无记录）。
-    private func state(of e: GraphQueries.RecordedLemma) -> WordMarkState {
+    /// 统一状态判定（概率优先；无概率回退显式标记）。
+    func markState(_ e: GraphQueries.RecordedLemma) -> WordMarkState {
         WordMarkState.from(
+            belief: e.belief,
             mastery: e.mastery > 0 ? e.mastery : nil,
             seenCount: e.seenCount)
     }

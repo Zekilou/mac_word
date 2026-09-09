@@ -126,6 +126,10 @@ extension GraphQueries {
         let updatedAt: Date?
         /// BKT 后验掌握度概率；nil = 尚无事件（未建后验）。
         let belief: Double?
+        /// 上下文多样性：出现过的不同 region 数。
+        let contextCount: Int
+        /// 词事件总数。
+        let eventCount: Int
     }
 
     /// 所有有记录的词（mastery > 0 或 seen_count > 0），按最近更新倒序。
@@ -135,7 +139,11 @@ extension GraphQueries {
             let rows = try Row.fetchAll(db, sql: """
                 SELECT k.entity_id, t.text_a AS text, t.text_b AS definition,
                        k.mastery, k.seen_count, k.source, k.updated_at,
-                       b.belief AS belief
+                       b.belief AS belief,
+                       (SELECT COUNT(DISTINCT e.region_id) FROM comp_word_event e
+                        WHERE e.lemma_id = k.entity_id) AS context_count,
+                       (SELECT COUNT(*) FROM comp_word_event e
+                        WHERE e.lemma_id = k.entity_id) AS event_count
                 FROM comp_user_known k
                 LEFT JOIN comp_text t ON t.entity_id = k.entity_id
                 LEFT JOIN comp_mastery_belief b ON b.entity_id = k.entity_id
@@ -151,7 +159,9 @@ extension GraphQueries {
                     seenCount: row["seen_count"],
                     source: row["source"],
                     updatedAt: row["updated_at"],
-                    belief: row["belief"])
+                    belief: row["belief"],
+                    contextCount: row["context_count"] ?? 0,
+                    eventCount: row["event_count"] ?? 0)
             }
         }
     }
