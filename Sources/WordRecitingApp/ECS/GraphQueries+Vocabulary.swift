@@ -133,7 +133,7 @@ extension GraphQueries {
     }
 
     /// 所有有记录的词（mastery > 0 或 seen_count > 0），按最近更新倒序。
-    /// @ai: 状态派生统一走 WordMarkState.from(mastery:seenCount:)，保证与词块显示口径一致。
+    /// @ai: 状态派生统一走 WordMarkState.from(belief:mastery:seenCount:)，保证与词块显示口径一致。
     func recordedLemmas() throws -> [RecordedLemma] {
         try database.dbWriter.read { db in
             let rows = try Row.fetchAll(db, sql: """
