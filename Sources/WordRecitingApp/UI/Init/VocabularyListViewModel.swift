@@ -87,6 +87,12 @@ final class VocabularyListViewModel {
         }
     }
 
+    /// BKT 后验掌握度百分比文本（如 "85%"）；无后验返回 nil。
+    func beliefText(_ e: GraphQueries.RecordedLemma) -> String? {
+        guard let belief = e.belief else { return nil }
+        return "\(Int((belief * 100).rounded()))%"
+    }
+
     /// 清洗词面显示（剥音标 / 词性尾巴）。
     func displayText(_ e: GraphQueries.RecordedLemma) -> String {
         let cleaned = WordNormalizer.clean(e.text)

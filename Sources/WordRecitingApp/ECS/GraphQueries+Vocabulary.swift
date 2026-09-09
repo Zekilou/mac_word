@@ -124,6 +124,8 @@ extension GraphQueries {
         /// 最近写入来源（init / rss 等）。
         let source: String?
         let updatedAt: Date?
+        /// BKT 后验掌握度概率；nil = 尚无事件（未建后验）。
+        let belief: Double?
     }
 
     /// 所有有记录的词（mastery > 0 或 seen_count > 0），按最近更新倒序。
@@ -132,9 +134,11 @@ extension GraphQueries {
         try database.dbWriter.read { db in
             let rows = try Row.fetchAll(db, sql: """
                 SELECT k.entity_id, t.text_a AS text, t.text_b AS definition,
-                       k.mastery, k.seen_count, k.source, k.updated_at
+                       k.mastery, k.seen_count, k.source, k.updated_at,
+                       b.belief AS belief
                 FROM comp_user_known k
                 LEFT JOIN comp_text t ON t.entity_id = k.entity_id
+                LEFT JOIN comp_mastery_belief b ON b.entity_id = k.entity_id
                 WHERE k.mastery > 0 OR k.seen_count > 0
                 ORDER BY k.updated_at DESC, k.entity_id DESC
                 """)
@@ -146,7 +150,8 @@ extension GraphQueries {
                     mastery: row["mastery"],
                     seenCount: row["seen_count"],
                     source: row["source"],
-                    updatedAt: row["updated_at"])
+                    updatedAt: row["updated_at"],
+                    belief: row["belief"])
             }
         }
     }

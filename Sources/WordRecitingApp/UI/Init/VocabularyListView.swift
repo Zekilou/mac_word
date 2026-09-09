@@ -120,6 +120,11 @@ struct VocabularyListView: View {
                         Text(String(format: "%.1f", e.mastery))
                             .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                     }
+                    if let beliefText = vm.beliefText(e) {
+                        Text(beliefText)
+                            .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                            .help("模型估计掌握度（BKT 后验概率，随事件更新）")
+                    }
                     // 阅读频次：读过的内容中累计出现次数（RSS 等自动累计）
                     HStack(spacing: 3) {
                         Image(systemName: "eye")

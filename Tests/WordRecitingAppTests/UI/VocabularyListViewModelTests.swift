@@ -94,4 +94,33 @@ final class VocabularyListViewModelTests: XCTestCase {
         vm.sortOrder = .recent
         XCTAssertEqual(vm.filtered.count, 3)
     }
+
+    func testBeliefTextFormatting() throws {
+        try world.registry.insertNode(id: "L1", kind: .lemma, createdAt: Date())
+        try world.registry.upsertComponent(TextComponent(
+            entityId: "L1", textA: "abandon", textB: nil, language: nil))
+        try world.registry.upsertComponent(UserKnownComponent(
+            entityId: "L1", mastery: 2.0, seenCount: 1,
+            source: "init", updatedAt: Date()))
+        try world.registry.upsertComponent(MasteryBeliefComponent(
+            entityId: "L1", belief: 0.847, opportunities: 5,
+            lastEventAt: nil, updatedAt: Date(), paramsVersion: "bkt-1"))
+
+        let vm = VocabularyListViewModel(world: world)
+        let entry = try XCTUnwrap(vm.entries.first)
+        XCTAssertEqual(vm.beliefText(entry), "85%")
+    }
+
+    func testBeliefTextIsNilWithoutBelief() throws {
+        try world.registry.insertNode(id: "L1", kind: .lemma, createdAt: Date())
+        try world.registry.upsertComponent(TextComponent(
+            entityId: "L1", textA: "abandon", textB: nil, language: nil))
+        try world.registry.upsertComponent(UserKnownComponent(
+            entityId: "L1", mastery: 2.0, seenCount: 1,
+            source: "init", updatedAt: Date()))
+
+        let vm = VocabularyListViewModel(world: world)
+        let entry = try XCTUnwrap(vm.entries.first)
+        XCTAssertNil(vm.beliefText(entry))
+    }
 }
