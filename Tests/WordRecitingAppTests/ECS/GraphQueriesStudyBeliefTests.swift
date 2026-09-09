@@ -46,4 +46,25 @@ final class GraphQueriesStudyBeliefTests: XCTestCase {
 
         XCTAssertNil(try world.graph.dueCards().first?.belief)
     }
+
+    func testDueCardsExcludesHighBeliefWords() throws {
+        try seedCard(lemmaId: "L1", cardId: "C1", text: "abandon", belief: 0.95)
+
+        XCTAssertTrue(try world.graph.dueCards().isEmpty)
+    }
+
+    func testDueCardsKeepsLowBeliefWords() throws {
+        try seedCard(lemmaId: "L2", cardId: "C2", text: "ability", belief: 0.40)
+
+        XCTAssertEqual(try world.graph.dueCards().count, 1)
+    }
+
+    func testDueCardsStillExcludesExplicitlyKnownWords() throws {
+        try seedCard(lemmaId: "L3", cardId: "C3", text: "zebra", belief: 0.30)
+        try world.registry.upsertComponent(UserKnownComponent(
+            entityId: "L3", mastery: 2.0, seenCount: 0,
+            source: "init", updatedAt: Date()))
+
+        XCTAssertTrue(try world.graph.dueCards().isEmpty)
+    }
 }

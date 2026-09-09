@@ -15,6 +15,14 @@ final class StudyViewModel {
     var isFront = true
     var errorMessage: String?
 
+    /// 当前卡的 BKT 后验概率（nil = 尚无事件）。
+    private(set) var currentBelief: Double?
+    /// 当前卡的词频带 / 全表排名。
+    private(set) var currentBand: Int?
+    private(set) var currentRank: Int?
+    /// 当前卡的事件摘要，如 "标记不会 1 次 · 出现过 3 次"。
+    private(set) var currentEventSummary: String?
+
     init(world: World) {
         self.world = world
     }
@@ -38,9 +46,11 @@ final class StudyViewModel {
             stats = try world.graph.studyStats()
             currentIndex = 0
             isFront = true
+            refreshCurrentProfile()
             errorMessage = nil
         } catch {
             queue = []
+            refreshCurrentProfile()
             errorMessage = "\(error)"
         }
     }
@@ -58,6 +68,7 @@ final class StudyViewModel {
                 kind: rating.rawValue >= Rating.good.rawValue ? .quizCorrect : .quizWrong)
             currentIndex += 1
             isFront = true
+            refreshCurrentProfile()
             stats = try world.graph.studyStats()
         } catch {
             errorMessage = "\(error)"
@@ -67,5 +78,34 @@ final class StudyViewModel {
     /// 翻转卡片（正面/背面）。
     func flip() {
         isFront.toggle()
+    }
+
+    /// 刷新当前卡的模型信息（后验概率 / 词频坐标 / 事件摘要）。
+    func refreshCurrentProfile() {
+        guard let card = currentCard else {
+            currentBelief = nil
+            currentBand = nil
+            currentRank = nil
+            currentEventSummary = nil
+            return
+        }
+        currentBelief = try? world.graph.masteryBelief(lemmaId: card.lemmaId)
+        let frequency = try? world.graph.lemmaFrequency(lemmaId: card.lemmaId)
+        currentBand = frequency?.band
+        currentRank = frequency?.freqRank
+        let counts = (try? world.graph.wordEventCountsByKind(lemmaId: card.lemmaId)) ?? [:]
+        currentEventSummary = Self.summaryText(counts: counts)
+    }
+
+    /// 事件计数 → 摘要文案（纯函数，可单测）。
+    nonisolated static func summaryText(counts: [String: Int]) -> String? {
+        let order: [WordEventKind] = [
+            .quizCorrect, .quizWrong, .markKnown, .markUnknown, .lookup, .seen
+        ]
+        let parts = order.compactMap { kind -> String? in
+            guard let count = counts[kind.rawValue], count > 0 else { return nil }
+            return "\(EventTimelinePresenter.kindLabel(kind)) \(count) 次"
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }

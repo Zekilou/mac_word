@@ -47,8 +47,8 @@ extension GraphQueries {
     }
 
     /// 到期卡片队列（含从未学过的"新卡"）：按到期时间升序（最紧迫优先）。
-    /// **排除全局已会词**（mastery ≥ 1.999）——用户已确认会的词不再进背诵队列。
-    /// @ai: 阈值 1.999 与 WordMarkState 极值容差一致（浮点存储偏差）；已会词要复习需先改回不会。
+    /// **排除**「用户显式标记会（mastery ≥ 1.999）」或「模型高置信（belief ≥ beliefCutoff）」的词。
+    /// @ai: 概率主口径——模型认为已经会的词不再进背诵队列；要复习需先改回不会。
     /// 每张卡附带词面（text_a/text_b）与 lemmaId，供闪卡 UI 使用。
     func dueCards(limit: Int = 100, now: Date = Date()) throws -> [CardListItem] {
         try database.dbWriter.read { db in
@@ -73,10 +73,16 @@ extension GraphQueries {
             WHERE c.kind = 'card'
               AND (ss.due_at IS NULL OR ss.due_at <= ?)
               AND (uk.mastery IS NULL OR uk.mastery < ?)
+              AND (mb.belief IS NULL OR mb.belief < ?)
             ORDER BY COALESCE(ss.due_at, '1970-01-01') ASC
             LIMIT ?
             """
-            let rows = try Row.fetchAll(db, sql: sql, arguments: [now, 1.999, limit])
+            let knownCutoff = 1.999
+            // 与 WordMarkState.knownThreshold 对齐的模型高置信阈值。
+            let beliefCutoff = 0.90
+            let rows = try Row.fetchAll(
+                db, sql: sql,
+                arguments: [now, knownCutoff, beliefCutoff, limit])
             return rows.map { row in
                 CardListItem(
                     cardId: row["card_id"],

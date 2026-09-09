@@ -80,6 +80,29 @@ struct StudyView: View {
                             .font(.title2)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 24)
+                        HStack(spacing: 10) {
+                            if let belief = vm.currentBelief {
+                                Text(MasteryPresentation.percentText(belief))
+                                    .font(.caption.weight(.semibold))
+                                    .monospacedDigit()
+                                    .foregroundStyle(stateColor(vm.currentBelief))
+                                    .help(MasteryPresentation.helpText(belief))
+                            } else {
+                                Text(MasteryPresentation.noDataText)
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Text(FrequencyBandPresentation.bandLabel(vm.currentBand))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .help(FrequencyBandPresentation.helpText(
+                                    band: vm.currentBand, rank: vm.currentRank))
+                        }
+                        if let summary = vm.currentEventSummary {
+                            Text(summary)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
                         Text("点击翻回正面")
                             .font(.caption).foregroundStyle(.tertiary)
                     }
@@ -96,6 +119,7 @@ struct StudyView: View {
                 ratingButton("不认识", rating: .again, color: .red) {
                     Image(systemName: "xmark")
                 }
+                Spacer().frame(width: 16)
                 ratingButton("有点难", rating: .hard, color: .orange) {
                     Image(systemName: "minus")
                 }
@@ -124,6 +148,9 @@ struct StudyView: View {
             VStack(spacing: 4) {
                 icon().font(.system(size: 18))
                 Text(title).font(.caption)
+                Text(keyLabel(rating))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
             .frame(width: 76, height: 64)
             .background(color.opacity(0.15))
@@ -146,6 +173,19 @@ struct StudyView: View {
         }
     }
 
+    private func keyLabel(_ rating: Rating) -> String {
+        switch rating {
+        case .again: return "1"
+        case .hard: return "2"
+        case .good: return "3"
+        case .easy: return "4"
+        }
+    }
+
+    private func stateColor(_ belief: Double?) -> Color {
+        WordMarkState.from(belief: belief, mastery: nil, seenCount: 0).color
+    }
+
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.circle")
@@ -153,7 +193,7 @@ struct StudyView: View {
                 .foregroundStyle(.green)
             Text("今天的复习完成！").font(.title3)
             Text("到期卡片已清空。去「创作」生成文章，或等待明天的新卡片。")
-            Text("已确认会（全局掌握度）的词会自动跳过背诵队列。")
+            Text("已确认会或模型高置信的词会自动跳过背诵队列。")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
