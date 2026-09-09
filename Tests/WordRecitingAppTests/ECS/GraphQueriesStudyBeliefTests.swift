@@ -67,4 +67,28 @@ final class GraphQueriesStudyBeliefTests: XCTestCase {
 
         XCTAssertTrue(try world.graph.dueCards().isEmpty)
     }
+
+    // MARK: - 到期口径一致性（studyStats.dueCount 必须与 dueCards 同口径）
+
+    func testDueCutoffsAreSharedConstants() {
+        XCTAssertEqual(GraphQueries.dueBeliefCutoff, 0.90, accuracy: 0.0001)
+        XCTAssertEqual(GraphQueries.dueMasteryCutoff, 1.999, accuracy: 0.0001)
+    }
+
+    func testStudyStatsDueCountExcludesHighBeliefWords() throws {
+        try seedCard(lemmaId: "L1", cardId: "C1", text: "abandon", belief: 0.95)
+        try seedCard(lemmaId: "L2", cardId: "C2", text: "ability", belief: 0.40)
+
+        XCTAssertEqual(try world.graph.dueCards().count, 1)
+        XCTAssertEqual(try world.graph.studyStats().dueCount, 1)
+    }
+
+    func testStudyStatsDueCountExcludesExplicitlyKnownWords() throws {
+        try seedCard(lemmaId: "L3", cardId: "C3", text: "zebra", belief: 0.30)
+        try world.registry.upsertComponent(UserKnownComponent(
+            entityId: "L3", mastery: 2.0, seenCount: 0,
+            source: "init", updatedAt: Date()))
+
+        XCTAssertEqual(try world.graph.studyStats().dueCount, 0)
+    }
 }

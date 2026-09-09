@@ -5,6 +5,13 @@ import Foundation
 /// @ai: 业务代码禁止手写 SQL，必须走 GraphQueries 的命名方法。
 extension GraphQueries {
 
+    /// 复习队列的「用户显式标记会」阈值：`mastery ≥ 该值` 不再进队列。
+    static let dueMasteryCutoff = 1.999
+    /// 复习队列的「模型高置信」阈值：`belief ≥ 该值` 不再进队列。
+    /// @ai: 比 `WordMarkState.knownThreshold`（0.85）更保守——队列只收「明确不会 / 不确定」的词。
+    ///      到期数（`studyStats.dueCount`）与队列（`dueCards`）必须共用这两个常量，禁止各写一份。
+    static let dueBeliefCutoff = 0.90
+
     /// 按 lemma 反查其卡片（Card 节点，instantiates 指向该 lemma）。
     /// 阅读区点击目标词评分时需要 cardId；未建卡返回 nil。
     func cardForLemma(_ lemmaId: EntityID) throws -> CardListItem? {
@@ -77,12 +84,9 @@ extension GraphQueries {
             ORDER BY COALESCE(ss.due_at, '1970-01-01') ASC
             LIMIT ?
             """
-            let knownCutoff = 1.999
-            // 与 WordMarkState.knownThreshold 对齐的模型高置信阈值。
-            let beliefCutoff = 0.90
             let rows = try Row.fetchAll(
                 db, sql: sql,
-                arguments: [now, knownCutoff, beliefCutoff, limit])
+                arguments: [now, Self.dueMasteryCutoff, Self.dueBeliefCutoff, limit])
             return rows.map { row in
                 CardListItem(
                     cardId: row["card_id"],
@@ -155,9 +159,11 @@ extension GraphQueries {
                 LEFT JOIN comp_schedule_state ss ON ss.entity_id = c.id
                 LEFT JOIN edges inst_edge ON inst_edge.src_id = c.id AND inst_edge.rel_type = 'instantiates'
                 LEFT JOIN comp_user_known uk ON uk.entity_id = inst_edge.dst_id
+                LEFT JOIN comp_mastery_belief mb ON mb.entity_id = inst_edge.dst_id
                 WHERE c.kind = 'card' AND (ss.due_at IS NULL OR ss.due_at <= ?)
                   AND (uk.mastery IS NULL OR uk.mastery < ?)
-                """, arguments: [now, 1.999]) ?? 0
+                  AND (mb.belief IS NULL OR mb.belief < ?)
+                """, arguments: [now, Self.dueMasteryCutoff, Self.dueBeliefCutoff]) ?? 0
             let todayStart = Calendar.current.startOfDay(for: now)
             let reviewedToday = try Int.fetchOne(db, sql: """
                 SELECT COUNT(*) FROM comp_review_event WHERE rated_at >= ?
