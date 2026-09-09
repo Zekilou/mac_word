@@ -10,6 +10,8 @@ final class BundledWordFrequencyProvider: WordFrequencyProvider {
     let sourceName: String
     private let bandByWord: [String: Int]
     private let rankByWord: [String: Int]
+    let bandFamilyCounts: [Int: Int]
+    let totalFamilyCount: Int
 
     private struct Payload: Decodable {
         struct Family: Decodable {
@@ -30,7 +32,9 @@ final class BundledWordFrequencyProvider: WordFrequencyProvider {
         }
         var bands: [String: Int] = [:]
         var ranks: [String: Int] = [:]
+        var familyCounts: [Int: Int] = [:]
         for family in payload.families {
+            familyCounts[family.band, default: 0] += 1
             for member in family.members {
                 let key = member.lowercased()
                 if let existing = ranks[key], existing <= family.rank { continue }
@@ -41,6 +45,8 @@ final class BundledWordFrequencyProvider: WordFrequencyProvider {
         self.sourceName = payload.source
         self.bandByWord = bands
         self.rankByWord = ranks
+        self.bandFamilyCounts = familyCounts
+        self.totalFamilyCount = payload.families.count
     }
 
     /// 从 bundle 加载；资源不存在时返回 nil（优雅降级）。

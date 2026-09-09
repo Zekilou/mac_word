@@ -13,6 +13,12 @@ final class AnalyticsViewModel {
     var overview: GraphQueries.MasteryOverview?
     var stats: StudyStats?
     var weakLemmas: [WeakLemmaStat] = []
+    /// 概率档位分布。
+    var distribution: GraphQueries.MasteryDistribution?
+    /// 词汇量画像（估算）。
+    var profile: VocabularyProfile?
+    /// 内置词频表是否已加载。
+    var hasFrequencyTable = false
     var errorMessage: String?
 
     init(world: World) {
@@ -25,11 +31,21 @@ final class AnalyticsViewModel {
             overview = try world.graph.masteryOverview()
             stats = try world.graph.studyStats()
             weakLemmas = try world.graph.weakLemmaDetails(limit: 10)
+            distribution = try world.graph.masteryDistribution(
+                knownThreshold: WordMarkState.knownThreshold,
+                unknownThreshold: WordMarkState.unknownThreshold)
+            let bandStats = try world.graph.masteryByBand()
+            let counts = WordFrequency.bundled?.bandFamilyCounts ?? [:]
+            hasFrequencyTable = WordFrequency.bundled != nil
+            profile = VocabularyProfileBuilder.build(
+                bandStats: bandStats, bandFamilyCounts: counts)
             errorMessage = nil
         } catch {
             overview = nil
             stats = nil
             weakLemmas = []
+            distribution = nil
+            profile = nil
             errorMessage = "\(error)"
         }
     }

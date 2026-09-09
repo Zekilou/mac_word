@@ -9,6 +9,10 @@ protocol WordFrequencyProvider: Sendable {
     func band(for word: String) -> Int?
     /// 词族在全表中的排序（1 起）；未知返回 nil。
     func rank(for word: String) -> Int?
+    /// 每个词族带的词族总数（band → 词族数）。用于词汇量画像的分母。
+    var bandFamilyCounts: [Int: Int] { get }
+    /// 全表词族总数。
+    var totalFamilyCount: Int { get }
 }
 
 enum WordFrequencyLoadError: LocalizedError, Equatable {
