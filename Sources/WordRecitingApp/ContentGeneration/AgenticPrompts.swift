@@ -204,14 +204,20 @@ enum AgenticPrompts {
     /// 提取两个标记之间的正文（容错：允许空格/换行/大小写/`<article>` 等变体）；无标记回退全量。
     /// @ai: 先归一化变体标记为规范形式（仅匹配被 =/<> 包裹的标记，不误伤正常短语），再按范围提取；
     /// 开标记之前与结束标记之后的内容一律丢弃；最后剥离前导大纲回显。
+    /// **结束标记只在开标记之后查找**——旧实现独立查找两者，若模型先回显了结束标记
+    /// （提示词里同时给了 START/END 模板，小模型复读指令是常态），
+    /// `start.upperBound > end.lowerBound` 会让切片直接 trap（SIGTRAP 崩溃）。
     static func extractMarkedBody(_ raw: String) -> String {
         let normalized = normalizeMarkers(raw)
         let body: String
         if let start = normalized.range(of: articleStart) {
-            if let endRange = normalized.range(of: articleEnd) {
+            let tail = start.upperBound..<normalized.endIndex
+            if let endRange = normalized.range(of: articleEnd, range: tail),
+               endRange.lowerBound >= start.upperBound {
                 body = String(normalized[start.upperBound..<endRange.lowerBound])
             } else {
-                // 有开标记但结束标记缺失（半截正文）：取开标记之后的内容
+                // 有开标记但其后没有结束标记（半截正文 / 结束标记出现在开标记之前）：
+                // 取开标记之后的内容
                 body = String(normalized[start.upperBound...])
             }
         } else {

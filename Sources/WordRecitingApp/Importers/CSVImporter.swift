@@ -209,8 +209,12 @@ struct CSVImporter: WordImporter {
     }
 
     static func makeInitialSchedule(entityId: EntityID, now: Date) -> ScheduleStateComponent {
+        // @ai: `difficulty` 承载 SM-2 的 factor，策略里以 `state.difficulty ?? 2.5` 取默认值。
+        //      旧实现写死 `difficulty: 0` → `?? 2.5` 永远不生效，factor 恒为 0，
+        //      于是第二次复习 `interval = previousInterval * 0 = 0`，卡片永远当天到期。
+        //      新卡应留 nil，让策略用默认 factor 2.5。
         ScheduleStateComponent(
-            entityId: entityId, stability: 0, difficulty: 0, dueAt: now,
+            entityId: entityId, stability: nil, difficulty: nil, dueAt: now,
             intervalDays: nil, reps: 0, lapses: 0, lastRating: nil,
             lastReviewedAt: nil, schedulerId: nil, queue: "new", customDataJson: nil)
     }

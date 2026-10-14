@@ -257,6 +257,55 @@ final class RuleBasedGeneratorTests: XCTestCase {
         XCTAssertNil(try graph.findLemmaId(byTextA: "nonexistent"))
     }
 
+    /// 回归：前缀回退不得把「另一个更长的单词」当成同一个词。
+    /// @ai: 旧实现纯前缀匹配 → `blank` 命中 `blanket`、`kill` 命中 `killer`。
+    ///      该方法被 findOrCreateLemma / ImportSystem 当存在性判断用，错配会静默污染图数据。
+    func testFindLemmaIdDoesNotMatchLongerUnrelatedWord() throws {
+        for (id, text) in [("L-blanket", "blanket"), ("L-killer", "killer"),
+                           ("L-confrontation", "confrontation")] {
+            try registry.insertNode(id: id, kind: .lemma, createdAt: epoch)
+            try registry.upsertComponent(TextComponent(
+                entityId: id, textA: text, textB: nil, language: nil))
+        }
+        XCTAssertNil(try graph.findLemmaId(byTextA: "blank"),
+                     "blank 不得命中 blanket")
+        XCTAssertNil(try graph.findLemmaId(byTextA: "kill"),
+                     "kill 不得命中 killer")
+        XCTAssertNil(try graph.findLemmaId(byTextA: "confront"),
+                     "confront 不得命中 confrontation")
+        // 精确匹配仍正常
+        XCTAssertEqual(try graph.findLemmaId(byTextA: "killer"), "L-killer")
+    }
+
+    /// 回归：脏 headword（干净词头 + HTML/括注尾巴）仍须可解析。
+    /// @ai: 收紧前缀匹配后不能把导入遗留的 `abandon<div>[sound:…]` 一起误杀。
+    func testFindLemmaIdStillResolvesDirtyHeadwordTails() throws {
+        let dirty: [(String, String)] = [
+            ("L-html", "abandon<div>[sound:abandon_400.mp3]</div>"),
+            ("L-entity", "aggregate&nbsp;<div>[sound:aggregate_400.mp3]</div>"),
+            ("L-pos", "collapse (v)<div>[kə'læps]</div>"),
+        ]
+        for (id, text) in dirty {
+            try registry.insertNode(id: id, kind: .lemma, createdAt: epoch)
+            try registry.upsertComponent(TextComponent(
+                entityId: id, textA: text, textB: nil, language: nil))
+        }
+        XCTAssertEqual(try graph.findLemmaId(byTextA: "abandon"), "L-html")
+        XCTAssertEqual(try graph.findLemmaId(byTextA: "aggregate"), "L-entity")
+        XCTAssertEqual(try graph.findLemmaId(byTextA: "collapse"), "L-pos")
+    }
+
+    /// 回归：多词短语不得被单个单词前缀误命中（`de facto` 不能被 `de` 命中）。
+    func testFindLemmaIdDoesNotMatchMultiwordPhraseBySingleWordPrefix() throws {
+        try registry.insertNode(id: "L-phrase", kind: .lemma, createdAt: epoch)
+        try registry.upsertComponent(TextComponent(
+            entityId: "L-phrase", textA: "be inclined to<div>[sound:…]</div>",
+            textB: nil, language: nil))
+        XCTAssertNil(try graph.findLemmaId(byTextA: "be"),
+                     "be 不得命中短语 be inclined to")
+        XCTAssertEqual(try graph.findLemmaId(byTextA: "be inclined to"), "L-phrase")
+    }
+
     func testGraphSynonyms() throws {
         try setupLemmas()
         let syns = try graph.synonyms(of: "A")
@@ -265,5 +314,39 @@ final class RuleBasedGeneratorTests: XCTestCase {
         XCTAssertEqual(syns.first?.surfaceForm, "forsake")
         XCTAssertEqual(syns.first?.weight, 0.9)
         XCTAssertEqual(syns.first?.sourceType, "user")
+    }
+
+    /// 回归：**多词短语**同义词必须显式匹配（不能依赖已收紧的前缀查找）。
+    /// @ai: 同义词 lemma 可能是 "give up" 这类短语。旧实现靠 findLemmaId 的纯前缀匹配
+    ///      偶然命中（查 "give" 命中 "give up"）；前缀匹配按数据正确性收紧后
+    ///      短语会失配 → 目标词 abandon 永远融不进正文。
+    ///      修复：在分词后、单词处理前，按"最长短语优先"显式扫描整段。
+    func testRewriteReplacesMultiWordPhraseSynonym() async throws {
+        try setupLemmas()   // A=abandon, B=forsake
+        // 追加短语 lemma "give up"，并建立 give up → abandon(A) 的同义词边
+        try registry.insertNode(id: "P", kind: .lemma, createdAt: epoch)
+        try registry.upsertComponent(TextComponent(
+            entityId: "P", textA: "give up", textB: nil, language: "en"))
+        try registry.insertEdge(id: "e-pa", srcId: "P", dstId: "A", rel: .mapsTo, createdAt: epoch)
+        try registry.upsertComponent(EdgeWeightedComponent(
+            entityId: "e-pa", weightDouble: 1.0, sourceType: "user"))
+
+        let gen = RuleBasedGenerator()
+        let article = try await gen.generate(
+            mode: .rewrite,
+            sourceText: "We should never give up our dreams.",
+            targetLemmas: ["A"],
+            constraints: GenerationConstraints(),
+            graph: graph)
+
+        XCTAssertTrue(article.body.lowercased().contains("abandon"),
+                      "短语 give up 应被替换成目标词 abandon，实际：\(article.body)")
+        XCTAssertEqual(article.body, "We should never abandon our dreams.")
+        let span = try XCTUnwrap(article.spans.first)
+        XCTAssertEqual(span.lemmaId, "A")
+        XCTAssertEqual(span.replacedFrom, "give up")
+        // span 偏移必须与替换后的 body 吻合
+        let bodyChars = Array(article.body)
+        XCTAssertEqual(String(bodyChars[span.start..<span.end]), "abandon")
     }
 }

@@ -271,7 +271,9 @@ final class AnkiImporter: WordImporter, Sendable {
         case 2: queueStr = "review"
         default: queueStr = "new"
         }
-        let difficulty = Double(card.factor) / 1000.0
+        // @ai: factor 单位是 1/1000（Anki 默认 2500 = 2.5）。新卡/未复习卡的 factor 可能是 0，
+        //      直接换算会得到 0 并把 SM-2 的 `?? 2.5` 兜底绕过（间隔恒 0 天）→ 视为「无 factor」。
+        let difficulty: Double? = card.factor > 0 ? Double(card.factor) / 1000.0 : nil
         let dueAt: Date?
         if card.queue == 2 {
             // review: due 是从 crt 起的天数偏移

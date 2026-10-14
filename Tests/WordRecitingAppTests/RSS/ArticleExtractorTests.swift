@@ -54,4 +54,29 @@ final class ArticleExtractorTests: XCTestCase {
         let text = ArticleExtractor.extract(from: html)
         XCTAssertTrue(text.contains("This article has long plain text"))
     }
+
+    /// 回归：大小写不敏感的区域提取不得跨字符串用索引（会崩溃）。
+    /// @ai: 旧实现用 `html.lowercased()` 求 Range 再切 `html`。小写化会改变 UTF-8 长度
+    ///      （İ U+0130 由 2 字节变 3 字节，共 27 个此类字符），两个串的 String.Index
+    ///      不可互换 → "Fatal error: String index range is out of bounds"。
+    ///      这里是崩溃复现输入（12 个 İ 即可越界）。
+    func testSectionHandlesLowercaseLengthChangingCharacters() {
+        let longTail = " trailing text that is definitely long enough to pass the forty character threshold."
+        for n in [1, 12, 50, 200] {
+            let body = String(repeating: "\u{0130}", count: n)
+            let html = "<ARTICLE>\(body)\(longTail)</ARTICLE>"
+            // 旧实现在 n>=12 时 SIGTRAP 崩溃；修复后必须安全返回内容
+            let text = ArticleExtractor.extract(from: html)
+            XCTAssertTrue(text.contains("trailing text"),
+                          "n=\(n) 不应崩溃且应提取到内容，实际：\(text.prefix(40))")
+        }
+    }
+
+    /// 回归：大写标签 + 非 ASCII 扩展字符组合仍能正确提取。
+    func testSectionCaseInsensitiveMixedWithUnicode() {
+        let iDot = "\u{0130}"
+        let html = "<Article><p>Straße und \(iDot)stanbul sind Orte mit viel Text, der lang genug ist.</p></Article>"
+        let text = ArticleExtractor.extract(from: html)
+        XCTAssertTrue(text.contains("stanbul"), "应提取到正文，实际：\(text.prefix(60))")
+    }
 }

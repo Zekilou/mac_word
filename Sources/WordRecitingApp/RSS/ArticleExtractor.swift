@@ -24,13 +24,19 @@ enum ArticleExtractor {
     }
 
     /// 提取首个指定标签的区段文本（不含标签本身）。
+    /// @ai: 大小写不敏感直接在**原串**上用 NSRegularExpression 匹配（.caseInsensitive），
+    ///      不再 `let lower = html.lowercased()` 拿 lower 的 Range 去切 html——
+    ///      小写化会改变 UTF-8 长度（İ/Ⱥ/ẞ/Ω/K 等 27 个字符），
+    ///      两个串的 String.Index 不可互换，越界即
+    ///      "Fatal error: String index range is out of bounds"（进程崩溃）。
     private static func section(of html: String, tag: String) -> String? {
-        let lower = html.lowercased()
-        guard let open = lower.range(of: "<\(tag)[^>]*>",
-                                     options: .regularExpression) else { return nil }
-        guard let close = lower.range(of: "</\(tag)>",
-                                      options: .regularExpression) else { return nil }
-        guard open.upperBound < close.lowerBound else { return nil }
+        guard let open = html.range(of: "<\(tag)[^>]*>",
+                                    options: [.regularExpression, .caseInsensitive]) else { return nil }
+        // 闭合标签只在开标签之后查找（同一串的 Range，天然可比）
+        let tail = open.upperBound..<html.endIndex
+        guard let close = html.range(of: "</\(tag)>",
+                                     options: [.regularExpression, .caseInsensitive],
+                                     range: tail) else { return nil }
         return String(html[open.upperBound..<close.lowerBound])
     }
 

@@ -62,6 +62,17 @@ final class EntityRegistry: @unchecked Sendable {
         return NodeRow(id: row["id"], kind: kind, createdAt: row["created_at"])
     }
 
+    /// 向 nodes 表插入一行；已存在则**跳过**（不抛错）。
+    /// @ai: 导入幂等用。CSV/Anki 的节点 id 是确定式的，重复导入或批内重复行
+    ///      用 `insertNode` 会撞 UNIQUE 约束并回滚整个导入事务。
+    ///      调用方可用 `db.changesCount` 判断本次是否真的新建。
+    func insertNodeIfAbsent(_ db: Database, id: EntityID, kind: NodeKind, createdAt: Date) throws {
+        try db.execute(
+            sql: "INSERT OR IGNORE INTO nodes (id, kind, created_at) VALUES (?, ?, ?)",
+            arguments: [id, kind.rawValue, createdAt]
+        )
+    }
+
     /// 从 nodes 表删除（CASCADE 自动删组件与 edges）（在传入事务内）。
     func deleteNode(_ db: Database, id: EntityID) throws {
         try db.execute(sql: "DELETE FROM nodes WHERE id = ?", arguments: [id])
@@ -86,6 +97,22 @@ final class EntityRegistry: @unchecked Sendable {
         )
         try db.execute(
             sql: "INSERT INTO edges (id, src_id, dst_id, rel_type, created_at) VALUES (?, ?, ?, ?, ?)",
+            arguments: [id, srcId, dstId, rel.rawValue, createdAt]
+        )
+    }
+
+    /// 向 edges 表插入一行（幂等）；边或对应 node 已存在则跳过。
+    /// @ai: 与 `insertNodeIfAbsent` 配套，保证重复导入同一文件不抛错、不回滚。
+    func insertEdgeIfAbsent(
+        _ db: Database, id: EntityID, srcId: EntityID, dstId: EntityID,
+        rel: EdgeRel, createdAt: Date
+    ) throws {
+        try insertNodeIfAbsent(db, id: id, kind: .edge, createdAt: createdAt)
+        try db.execute(
+            sql: """
+            INSERT OR IGNORE INTO edges (id, src_id, dst_id, rel_type, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
             arguments: [id, srcId, dstId, rel.rawValue, createdAt]
         )
     }

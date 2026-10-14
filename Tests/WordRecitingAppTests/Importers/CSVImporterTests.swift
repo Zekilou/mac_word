@@ -141,8 +141,12 @@ final class CSVImporterTests: XCTestCase {
         let importer = CSVImporter()
         let batch = try await importer.readNodes(from: url) { _ in }
         let ss = try XCTUnwrap(batch.scheduleStates.first)
-        XCTAssertEqual(ss.stability, 0)
-        XCTAssertEqual(ss.difficulty, 0)
+        // 回归：新卡的 factor/stability 必须是 nil，不能写死 0。
+        // @ai: `difficulty` 承载 SM-2 factor，策略用 `?? 2.5` 取默认；
+        //      旧实现写 0 → `?? 2.5` 不生效 → 第二次复习 interval = 3 * 0 = 0，
+        //      卡片永远当天到期。测试此前把这个错误默认值断言成「正确」（已修正）。
+        XCTAssertNil(ss.stability, "新卡 stability 应为 nil（未复习）")
+        XCTAssertNil(ss.difficulty, "新卡 difficulty 应为 nil，交由策略用默认 factor 2.5")
         XCTAssertEqual(ss.reps, 0)
         XCTAssertEqual(ss.lapses, 0)
         XCTAssertEqual(ss.queue, "new")

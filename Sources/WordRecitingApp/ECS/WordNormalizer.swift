@@ -65,8 +65,16 @@ enum WordNormalizer {
             if isEsStem { return stem }
         }
         // s → ""（battles → battle, books → book）；防 this(4)/was(3)/his(3)
+        // @ai: 长度阈值只看**输入**长度会把 5 字母的 s 结尾单数词砍坏——
+        //      旧实现 `class`→`clas`、`process`→`proces`、`glass`→`glas`、`business`→`busines`，
+        //      导致单数与复数归一化成两个不同 lemma（`class` vs `classes`）。
+        //      额外要求词干不以 s / u / i 结尾：这些是**本身以 s 结尾的单数词**
+        //      （class/glass/process/business/address、focus/status/virus/campus、analysis/basis），
+        //      不是「加 -s 构成的复数」。
         if lower.count > 4, lower.hasSuffix("s") {
-            return String(lower.dropLast(1))
+            let stem = String(lower.dropLast(1))
+            let singularEnding = stem.hasSuffix("s") || stem.hasSuffix("u") || stem.hasSuffix("i")
+            if !singularEnding { return stem }
         }
         // ing → ""（reading → read, running → run）；thing/sing/bring 长度 ≤5 不剥
         if lower.count > 5, lower.hasSuffix("ing") {

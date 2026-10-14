@@ -136,8 +136,14 @@ struct LocalLLMGenerator: ContentGenerator {
 
     /// 上下文压缩：估算 prompt token，超窗预算（窗口 − 输出预算 − 安全边距 256）时截断。
     /// @ai: 长文章自查/大计划场景防止 prompt 超 n_ctx 导致解码失败或输出被挤没；
-    ///      **protectedPrefix（强制规则区）常驻不可压缩**——prompt 以规则块开头，压缩只作用于其后的
-    ///      可变内容（词列表/计划/文章），规则永不丢失（用户要求：规则不能压缩，词列表可截断）。
+    ///      **protectedPrefix（强制规则区）常驻不可压缩**——压缩只作用于其后的可变内容
+    ///      （词列表/计划/文章），规则永不丢失（用户要求：规则不能压缩，词列表可截断）。
+    ///
+    ///      旧实现无条件 `prompt.dropFirst(protectedPrefix.count)`：只有「prompt 确实以
+    ///      protectedPrefix 开头」时才成立。改写模式（`rewritePrompt`）的 prompt 以
+    ///      "Rewrite the following English text…" 开头、**不含** hardRules，于是 dropFirst(782)
+    ///      会砍掉真正的指令头（目标词列表被吃掉）。现在先断言前缀确实匹配，
+    ///      不匹配就退化为「保留 protectedPrefix + 截断原 prompt 的可变部分」，绝不盲删。
     func compressContext(_ prompt: String, reservedForOutput: Int, protectedPrefix: String = "") -> String {
         let budget = contextWindow - reservedForOutput - 256
         guard budget > 0, ContextCompressor.estimateTokens(prompt) > budget else { return prompt }
@@ -146,8 +152,16 @@ struct LocalLLMGenerator: ContentGenerator {
         }
         let prefixTokens = ContextCompressor.estimateTokens(protectedPrefix)
         let contentBudget = max(64, budget - prefixTokens)
-        return protectedPrefix + ContextCompressor.truncate(
-            String(prompt.dropFirst(protectedPrefix.count)), toBudget: contentBudget)
+
+        // 仅当 prompt 真的以受保护前缀开头时，才把前缀原样保留 + 截断其后内容。
+        if prompt.hasPrefix(protectedPrefix) {
+            return protectedPrefix + ContextCompressor.truncate(
+                String(prompt.dropFirst(protectedPrefix.count)), toBudget: contentBudget)
+        }
+        // 否则：不能按 protectedPrefix 的长度盲删（会把正文指令头砍掉）。
+        // 保留 protectedPrefix（规则仍需在上下文里），并对其后的**完整 prompt** 做截断。
+        // @ai: 这样改写模式也安全——规则加上，原文/指令只截断、不错位。
+        return protectedPrefix + ContextCompressor.truncate(prompt, toBudget: contentBudget)
     }
 
     func generate(
@@ -564,9 +578,23 @@ struct LocalLLMGenerator: ContentGenerator {
         if listLines >= 2, normalSentenceLines == 0 {
             return true
         }
-        // 5) 释义式开头（词典条目句式）：第一句以「普通大写名词 + is a/an/the · means · refers to」开头，
-        //    如 "Affection is a deep and lasting emotional connection that..." / "Haunting is a phenomenon that..."
-        //    对齐 Python 段首释义判定（_is_definition_para），仅查首段降低误伤
+        // 5) 释义式开头（词典条目句式）：第一句以「普通大写名词 + is a/an [修饰语] 定义性名词」开头，
+        //    如 "Affection is a deep and lasting emotional connection that..." /
+        //       "Haunting is a phenomenon that has captivated..." / "Abandon means to leave...".
+        //    @ai: 判定必须**严格**。旧实现把 "… is a …" / "… are …" 一律当释义，
+        //    而「冠词 + be 动词」是英语最常见句式，导致正常文章开头几乎全被误杀：
+        //      "Urban gardening is a growing trend in many cities."  → 误判
+        //      "Reading is an important habit for children to develop." → 误判
+        //      "Cities are growing quickly, and public transport…"    → 误判（" are " 命中）
+        //      "Climate change is a pressing global issue…"           → 误判
+        //    这些都发生在**最终校验**处 → 抛 noArticle 并**丢弃整篇生成结果**，
+        //    用户只看到莫名的"生成失败"。
+        //    收紧为三条高精度信号（宁可漏判也不误杀，误杀会毁掉一次完整生成）：
+        //      a) means / refers to / is defined as / is called —— 正常叙述几乎不用；
+        //      b) is a/an + (最多 4 个修饰词) + 定义性名词（kind/type/form/connection…）；
+        //      c) 明显异常（.mp3 / 音标）等由上面的规则另行拦截。
+        //    量词列表刻意保持"定义性"：trend/habit/issue/place 这类普通名词**不在**其中，
+        //    因为 "X is a growing trend / an important habit" 是正常描述而非词典释义。
         let stopHeads: Set<String> = ["The", "This", "That", "These", "Those", "It", "In", "On",
             "At", "A", "An", "And", "But", "For", "With", "From", "Each", "Every", "What", "How",
             "Why", "When", "Where", "There", "Our", "We", "You", "One", "As", "If", "No", "So",
@@ -579,8 +607,21 @@ struct LocalLLMGenerator: ContentGenerator {
            head.count >= 4, !stopHeads.contains(String(head)),
            firstSentence.lowercased().hasPrefix(head.lowercased()) {
             let rest = String(firstSentence.dropFirst(head.count)).lowercased()
-            let defMarkers = [" is a ", " is an ", " is the ", " means ", " refers to ", " are "]
-            if defMarkers.contains(where: { rest.contains($0) }) { return true }
+            let strongMarkers = [" means ", " refers to ", " is defined as ", " is called "]
+            if strongMarkers.contains(where: { rest.contains($0) }) { return true }
+            let definers = ["kind", "sort", "type", "form", "feeling", "state", "act", "process",
+                            "person", "thing", "way", "method", "system", "quality", "condition",
+                            "situation", "event", "group", "part", "amount", "period", "area",
+                            "style", "practice", "belief", "idea", "emotion", "phenomenon",
+                            "substance", "device", "tool", "science", "branch", "study",
+                            "word", "term", "expression", "phrase", "spelling",
+                            "connection", "relationship", "concept", "notion", "experience"]
+            // @ai: 必须用括号把整个量词分支分组——写成 " is (a|an) kind|sort|..." 时 `|`
+            //      会作用于整个模式，裸 `form` 就能匹配 "trans**form**ed"（已踩过一次）。
+            let defPattern = "\\bis\\s+(a|an)\\s+(\\w+\\s+){0,4}(" + definers.joined(separator: "|") + ")\\b"
+            if rest.range(of: defPattern, options: .regularExpression) != nil {
+                return true
+            }
         }
         // 过短且是写作自述/元注释（如 "The word 'esthetically' is the US spelling, I will use it."）
         let words = trimmed.split(whereSeparator: { !$0.isLetter }).count

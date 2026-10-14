@@ -2,7 +2,19 @@
 .swiftpm/
 *.xcodeproj/
 DerivedData/
-Package.resolved
+
+# 注意：Package.resolved **必须入库**（原被忽略 → 依赖不可复现）。
+# @ai: Package.swift 里 llama.swift 用 branch: "main" 浮动引用，
+#      没有锁定文件时全新克隆会拉到不同的 llama.cpp 版本（实测拉到 b10549，
+#      而本机验证过的是 b10336）。锁定文件是唯一的复现保障，不能 ignore。
+
+# 本地数据库（启动时生成，勿入库）
+db.sqlite
+db.sqlite-shm
+db.sqlite-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 
 # 分发产物（不入库；由 scripts/create-app-bundle.sh 现场生成）
 *.app/

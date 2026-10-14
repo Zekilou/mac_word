@@ -20,6 +20,13 @@ struct ModelDownloadState: Identifiable, Equatable, Sendable {
 /// 下载到系统临时文件 → 完成后移动至目标路径；进度通过 @Sendable 回调上报。
 /// @ai: 非 UI 类；进度回调由调用方自行切主线程。取消/暂停调用对应方法。
 final class ModelDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    /// 保护 delegate 回调与调用方（async 侧）之间的共享状态。
+    /// @ai: `@unchecked Sendable` 意味着需要自己保证线程安全。URLSession 的 delegate 回调
+    ///      在 delegateQueue（非主线程）执行，而 pause()/cancel() 由调用方线程触发；
+    ///      旧实现对这些 var 完全没有同步 → `continuation` 的「读-置nil-resume」不是原子的，
+    ///      与 `didCompleteWithError` 的 `guard continuation != nil` 竞争，
+    ///      可能**双重 resume 同一个 CheckedContinuation**（运行时 trap）或丢失 resume 永久挂起。
+    private let lock = NSLock()
     private var session: URLSession?
     private var downloadTask: URLSessionDownloadTask?
     private var progressHandler: (@Sendable (Int64, Int64) -> Void)?
@@ -27,17 +34,21 @@ final class ModelDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Se
     private var continuation: CheckedContinuation<URL, Error>?
     private var resumeData: Data?
 
+    /// 原子取出并清空 continuation（保证只有一个回调能 resume）。
+    private func takeContinuation() -> CheckedContinuation<URL, Error>? {
+        lock.lock(); defer { lock.unlock() }
+        let c = continuation
+        continuation = nil
+        return c
+    }
+
     /// 首次下载到 destination，返回最终文件 URL。
     func download(
         url: URL, to destination: URL,
         progress: @escaping @Sendable (Int64, Int64) -> Void
     ) async throws -> URL {
-        self.destination = destination
-        self.progressHandler = progress
-        let session = makeSession()
-        self.session = session
-        let task = session.downloadTask(with: url)
-        self.downloadTask = task
+        let task = prepareDownload(destination: destination, progress: progress,
+                                   resumeData: nil, url: url)
         return try await awaitCompletion { task.resume() }
     }
 
@@ -46,33 +57,56 @@ final class ModelDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Se
         url: URL, to destination: URL, resumeData: Data,
         progress: @escaping @Sendable (Int64, Int64) -> Void
     ) async throws -> URL {
+        let task = prepareDownload(destination: destination, progress: progress,
+                                   resumeData: resumeData, url: url)
+        return try await awaitCompletion { task.resume() }
+    }
+
+    /// 同步准备阶段（建 session/task 并登记状态）；锁只在同步上下文使用。
+    /// @ai: Swift 6 禁止在 async 上下文直接 NSLock.lock/unlock，故把加锁逻辑抽到同步方法。
+    private func prepareDownload(
+        destination: URL,
+        progress: @escaping @Sendable (Int64, Int64) -> Void,
+        resumeData: Data?,
+        url: URL
+    ) -> URLSessionDownloadTask {
+        let session = makeSession()
+        let task = resumeData.map { session.downloadTask(withResumeData: $0) }
+            ?? session.downloadTask(with: url)
+        lock.lock()
         self.destination = destination
         self.progressHandler = progress
         self.resumeData = resumeData
-        let session = makeSession()
         self.session = session
-        let task = session.downloadTask(withResumeData: resumeData)
         self.downloadTask = task
-        return try await awaitCompletion { task.resume() }
+        lock.unlock()
+        return task
     }
 
     /// 暂停：保存续传点（供 resume 使用），当前 await 抛 CancellationError 结束。
     /// - Parameter completion: 拿到 resumeData 后的回调（任意线程）。
     func pause(completion: (@Sendable (Data?) -> Void)? = nil) {
-        downloadTask?.cancel { [weak self] data in
-            self?.resumeData = data
+        lock.lock()
+        let task = downloadTask
+        lock.unlock()
+        task?.cancel { [weak self] data in
+            guard let self else { completion?(data); return }
+            self.lock.lock()
+            self.resumeData = data
+            self.lock.unlock()
             completion?(data)
         }
-        let cont = continuation
-        continuation = nil
-        cont?.resume(throwing: CancellationError())
+        // 原子取出，保证与 delegate 回调不会双重 resume
+        takeContinuation()?.resume(throwing: CancellationError())
     }
 
     /// 取消（不保留续传点）。
     func cancel() {
-        downloadTask?.cancel()
-        continuation?.resume(throwing: CancellationError())
-        continuation = nil
+        lock.lock()
+        let task = downloadTask
+        lock.unlock()
+        task?.cancel()
+        takeContinuation()?.resume(throwing: CancellationError())
     }
 
     // MARK: - 私有
@@ -85,7 +119,7 @@ final class ModelDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Se
 
     private func awaitCompletion(_ start: () -> Void) async throws -> URL {
         try await withCheckedThrowingContinuation { cont in
-            continuation = cont
+            lock.lock(); continuation = cont; lock.unlock()
             start()
         }
     }
@@ -97,38 +131,42 @@ final class ModelDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Se
         didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
         totalBytesExpectedToWrite: Int64
     ) {
-        progressHandler?(totalBytesWritten, totalBytesExpectedToWrite)
+        lock.lock()
+        let handler = progressHandler
+        lock.unlock()
+        handler?(totalBytesWritten, totalBytesExpectedToWrite)
     }
 
     nonisolated func urlSession(
         _ session: URLSession, downloadTask: URLSessionDownloadTask,
         didFinishDownloadingTo location: URL
     ) {
-        guard let dest = destination else { return }
+        lock.lock()
+        let dest = destination
+        lock.unlock()
+        guard let dest else { return }
         do {
             let fm = FileManager.default
             if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
             try fm.moveItem(at: location, to: dest)
-            continuation?.resume(returning: dest)
+            takeContinuation()?.resume(returning: dest)
         } catch {
-            continuation?.resume(throwing: error)
+            takeContinuation()?.resume(throwing: error)
         }
-        continuation = nil
     }
 
     nonisolated func urlSession(
         _ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?
     ) {
         guard let error else { return }
-        // 主动暂停/取消：continuation 已被 resume，忽略后续回调
-        guard continuation != nil else { return }
+        // 主动暂停/取消：continuation 已被取走 → takeContinuation 返回 nil，安全忽略
+        guard let cont = takeContinuation() else { return }
         // HTTP 错误（如 404 文件名不对）给出可读状态码
         if let http = task.response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            continuation?.resume(throwing: ModelDownloadError.httpStatus(http.statusCode))
+            cont.resume(throwing: ModelDownloadError.httpStatus(http.statusCode))
         } else {
-            continuation?.resume(throwing: error)
+            cont.resume(throwing: error)
         }
-        continuation = nil
     }
 }
 

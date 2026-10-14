@@ -226,4 +226,33 @@ final class StudySystemTests: XCTestCase {
         XCTAssertEqual(s?.reps, 2)   // seed 1 次 + 阅读标记 1 次
         XCTAssertFalse(vm.markReadingWord(lemmaId: "lemma-999", rating: .good))
     }
+
+    // MARK: - 回归：CSV 新卡不得出现「间隔恒 0」
+
+    /// 回归：CSV 导入的新卡（difficulty 曾写死 0）经两次 good 后间隔必须递增。
+    /// @ai: 旧实现 `difficulty: 0` 绕过了 SM-2 的 `?? 2.5` 默认值：
+    ///      第二次复习 `interval = previousInterval * 0 = 0` → 当天又到期，永远学不完。
+    func testCSVImportedCardIntervalGrowsAcrossReviews() throws {
+        let t0 = now
+        // 用 CSVImporter 的初始调度状态（回归点在这里，不在手写组件）
+        try registry.insertNode(id: "card-csv", kind: .card, createdAt: t0)
+        try registry.upsertComponent(
+            CSVImporter.makeInitialSchedule(entityId: "card-csv", now: t0))
+
+        // 第一次 good：新卡固定 3 天
+        try world.run(StudySystem(), context: .init(cardId: "card-csv", rating: .good, reviewedAt: t0))
+        let first = try XCTUnwrap(state("card-csv"))
+        XCTAssertEqual(try XCTUnwrap(first.intervalDays), 3, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(first.difficulty), 2.5, accuracy: 0.0001,
+                       "factor 必须回落到默认 2.5，而不是 0")
+
+        // 第二次 good（3 天后）：interval = 3 * 2.5 = 7.5，必须 > 0 且比上次大
+        let t1 = t0.addingTimeInterval(3 * 86400)
+        try world.run(StudySystem(), context: .init(cardId: "card-csv", rating: .good, reviewedAt: t1))
+        let second = try XCTUnwrap(state("card-csv"))
+        let secondInterval = try XCTUnwrap(second.intervalDays)
+        XCTAssertGreaterThan(secondInterval, 0, "间隔不得为 0（旧 bug：factor 0 导致永远当天到期）")
+        XCTAssertGreaterThan(secondInterval, try XCTUnwrap(first.intervalDays),
+                             "间隔应随复习递增")
+    }
 }

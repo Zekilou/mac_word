@@ -99,8 +99,12 @@ struct GeneralSettingsView: View {
     }
 
     private var appVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+        // @ai: `swift run` 没有 Info.plist → 旧回退是 "1.0"/"0"，与 .app（1.0.0/1）显示不一致。
+        //      统一以 AppIdentity 常量为准（脚本写入 Info.plist 的也是这两个值）。
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+            ?? AppIdentity.versionShort
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
+            ?? AppIdentity.versionBuild
         return "\(version)（\(build)）"
     }
 

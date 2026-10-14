@@ -153,11 +153,17 @@ ok "  ID=${BUNDLE_ID}, 版本=${VER_SHORT} build ${VER_BUILD}"
 log "校验结构 ..."
 ERRS=0
 check() { if [[ ! -e "$1" ]]; then warn "  缺: $1"; ERRS=1; fi; }
+warn_if_missing() { if [[ ! -e "$1" ]]; then warn "  可选资源缺失（功能降级，不中止）: $1"; fi; }
 check "$APP_BUNDLE/Contents/Info.plist"
 check "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 check "$APP_BUNDLE/Contents/Frameworks/llama.framework/Versions/A/llama"
-check "$APP_BUNDLE/Contents/Resources/${SPM_PRODUCT}_${SPM_PRODUCT}.bundle/glove50d.bin"
-check "$APP_BUNDLE/Contents/Resources/GRDB_GRDB.bundle/PrivacyInfo.xcprivacy"
+# @ai: SPM 资源 bundle 的实际布局是 <bundle>/Contents/Resources/<file>。
+#      脚本旧版本漏了 Contents/Resources 这一层 → 资源其实已就位却报「缺」并中止打包。
+RES_BUNDLE_DIR="$APP_BUNDLE/Contents/Resources/${SPM_PRODUCT}_${SPM_PRODUCT}.bundle/Contents/Resources"
+check "$RES_BUNDLE_DIR/word_families.json"
+check "$APP_BUNDLE/Contents/Resources/GRDB_GRDB.bundle/Contents/Resources/PrivacyInfo.xcprivacy"
+# glove50d.bin 为本地生成产物（不入库），缺失时 GloVeEmbeddingProvider 优雅降级 → 仅告警
+warn_if_missing "$RES_BUNDLE_DIR/glove50d.bin"
 if [[ $ERRS -eq 1 ]]; then echo "中止：结构校验失败"; exit 1; fi
 ok "  完整"
 

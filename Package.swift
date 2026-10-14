@@ -1,5 +1,18 @@
 // swift-tools-version: 6.0
+import Foundation
 import PackageDescription
+
+/// 可选资源：只有文件真实存在时才声明为 SPM resource。
+/// @ai: `glove50d.bin`（~6MB GloVe 词向量）是**本地生成产物**，按 .gitignore 不入库。
+///      直接写死 `.process(...)` 会让全新克隆（以及 CI/他人机器）在构建期报
+///      "Invalid Resource ... File not found" 并**直接编译失败**。
+///      运行时 `GloVeEmbeddingProvider(bundledIn:)` 缺失资源时返回 nil 并优雅降级，
+///      所以这里按存在性条件声明，保证「克隆即可编译」。
+func optionalResource(_ path: String) -> Resource? {
+    FileManager.default.fileExists(atPath: "Sources/WordRecitingApp/\(path)")
+        ? .process(path)
+        : nil
+}
 
 let package = Package(
     name: "WordRecitingApp",
@@ -17,9 +30,9 @@ let package = Package(
                 .product(name: "LlamaSwift", package: "llama.swift")
             ],
             resources: [
-                .process("Resources/glove50d.bin"),
+                optionalResource("Resources/glove50d.bin"),
                 .process("Resources/word_families.json")
-            ]
+            ].compactMap { $0 }
         ),
         .testTarget(
             name: "WordRecitingAppTests",

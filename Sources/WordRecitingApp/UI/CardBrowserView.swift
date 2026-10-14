@@ -24,9 +24,13 @@ struct CardBrowserView: View {
     }
 
     private func content(_ vm: CardBrowserViewModel) -> some View {
-        HSplitView {
-            listPane(vm).frame(minWidth: 260, idealWidth: 320)
-            detailPane(vm).frame(minWidth: 280, idealWidth: 380)
+        // @ai: 禁用 HSplitView（macOS 27 beta 拖分栏会触发 FocusBridge key-view-loop 崩溃，
+        //      见 docs/superpowers/specs/2026-08-11-ui-redesign-design.md「禁用 List 与 HSplitView 拖拽」）。
+        //      改用固定左栏 + Divider + 弹性右栏，与 ReadingView 同款两栏布局。
+        HStack(spacing: 0) {
+            listPane(vm).frame(width: 300)
+            Divider()
+            detailPane(vm).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle(deckName)
     }

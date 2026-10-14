@@ -35,7 +35,20 @@ final class AgentSidecarClient: @unchecked Sendable {
     /// 启动子进程并开始读取 stdout 事件行。
     func start() throws {
         guard !isRunning else { return }
-        try process.run()
+        // @ai: Process 不可重复 run()。若此前已启动过（进程退出/崩溃后 isRunning 被置 false），
+        //      直接 run() 会抛一个**裸 NSError(3587)**——它不是 AgentSidecarError，
+        //      于是 AgentSidecarGenerator 的 `catch let error as AgentSidecarError` 匹配不到，
+        //      「sidecar 不可用 → 回退本地管线」的约定失效，用户拿到硬失败。
+        //      这里归一成 AgentSidecarError，保证回退路径一定生效。
+        guard !hasLaunched else {
+            throw AgentSidecarError.clientStopped
+        }
+        do {
+            try process.run()
+        } catch {
+            throw AgentSidecarError.clientStopped
+        }
+        hasLaunched = true
         isRunning = true
         readerTask = Task { [weak self] in
             guard let self else { return }
@@ -48,6 +61,19 @@ final class AgentSidecarClient: @unchecked Sendable {
             } catch {
                 self.failAll(error)
             }
+        }
+    }
+
+    /// 进程是否已启动过（Process 只能 run 一次）。
+    private var hasLaunched = false
+
+    /// 释放时确保子进程被回收。
+    /// @ai: 旧实现 `stop()` 零调用点、也没有 deinit，而 GenerateViewModel/RewriteViewModel
+    ///      每次生成都 new 一个 client → **每生成一次就漏一个 python 子进程**。
+    deinit {
+        readerTask?.cancel()
+        if hasLaunched, process.isRunning {
+            process.terminate()
         }
     }
 
@@ -96,11 +122,12 @@ final class AgentSidecarClient: @unchecked Sendable {
         return stream
     }
 
-    /// 终止子进程并清理。
+    /// 终止子进程并清理（幂等；由调用方或 deinit 触发）。
     func stop() {
         readerTask?.cancel()
         readerTask = nil
-        if isRunning {
+        // 用 hasLaunched + isRunning 双条件：进程可能已自行退出（此时 terminate 无意义）
+        if hasLaunched, process.isRunning {
             process.terminate()
         }
         failAll(AgentSidecarError.clientStopped)

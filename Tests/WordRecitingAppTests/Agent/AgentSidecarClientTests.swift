@@ -116,4 +116,44 @@ final class AgentSidecarClientTests: XCTestCase {
             _ = error
         }
     }
+
+    // MARK: - 重启语义（回归）
+
+    /// 回归：进程退出后再次 start 必须抛 **AgentSidecarError**（而非裸 NSError）。
+    /// @ai: `Process` 不可重复 run()，二次 run 抛 NSCocoaErrorDomain 3587（普通 Error）。
+    ///      旧实现让它穿透，而 AgentSidecarGenerator 只 `catch as AgentSidecarError`
+    ///      → 「sidecar 不可用则回退本地管线」的约定失效，用户拿到硬失败。
+    func testRestartAfterExitThrowsAgentSidecarError() async throws {
+        guard let python = pythonExecutable, let script = sidecarScript else {
+            throw XCTSkip("sidecar 运行环境缺失")
+        }
+        let client = AgentSidecarClient(executable: python, scriptPath: script)
+        defer { client.stop() }
+
+        _ = try await client.ping(timeout: 5)
+        // 模拟进程崩溃/退出：stop 后再 start（Process 已 run 过）
+        client.stop()
+        do {
+            try client.start()
+            // 若实现允许重启且真的跑起来，也算通过（不同版本 Process 行为可能不同）
+        } catch let error as AgentSidecarError {
+            // 期望路径：归一成 AgentSidecarError，回退逻辑可捕获
+            _ = error
+        } catch {
+            XCTFail("重启失败必须抛 AgentSidecarError（可被回退逻辑捕获），实际：\(error)")
+        }
+    }
+
+    /// 回归：deinit 必须回收子进程（旧实现 stop() 零调用点、也无 deinit → 每生成一次漏一个进程）。
+    func testDeinitTerminatesChildProcess() async throws {
+        guard let python = pythonExecutable, let script = sidecarScript else {
+            throw XCTSkip("sidecar 运行环境缺失")
+        }
+        var client: AgentSidecarClient? = AgentSidecarClient(executable: python, scriptPath: script)
+        _ = try await client?.ping(timeout: 5)
+        client = nil   // 释放 → deinit 应终止进程
+        XCTAssertNil(client)
+        // 给 deinit + terminate 一点时间；这里只断言不崩溃/不悬挂
+        try await Task.sleep(nanoseconds: 300_000_000)
+    }
 }

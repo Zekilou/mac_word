@@ -98,4 +98,44 @@ final class GraphQueriesStudyBeliefTests: XCTestCase {
 
         XCTAssertEqual(try world.graph.queueDueDates().count, 1)
     }
+
+    /// 回归：**没有 instantiates 边**的卡片（CSV `front,back` 导入）必须三处口径一致。
+    /// @ai: 旧实现里 dueCards 用 INNER JOIN、dueCount/queueDueDates 用 LEFT JOIN：
+    ///      这类卡片会被统计为「今日到期」却永远不进复习队列，
+    ///      首页/背诵页显示「今日到期 1」而队列为空。
+    func testDueQueueAndCountAgreeForCardWithoutInstantiatesEdge() throws {
+        let now = Date()
+        // CSV front/back 分支：只建 card 节点 + 自身 comp_text + has 边（无 lemma、无 instantiates）
+        try world.registry.insertNode(id: "deck-d", kind: .deck, createdAt: now)
+        try world.registry.insertNode(id: "card-d-hello", kind: .card, createdAt: now)
+        try world.registry.upsertComponent(TextComponent(
+            entityId: "card-d-hello", textA: "hello", textB: "你好", language: nil))
+        try world.registry.insertEdge(id: "has-d-hello", srcId: "deck-d", dstId: "card-d-hello",
+                                      rel: .has, createdAt: now)
+        try world.registry.upsertComponent(ScheduleStateComponent(
+            entityId: "card-d-hello", stability: 0, difficulty: 0, dueAt: now,
+            intervalDays: nil, reps: 0, lapses: 0, lastRating: nil,
+            lastReviewedAt: nil, schedulerId: nil, queue: "new", customDataJson: nil))
+
+        let cards = try world.graph.dueCards()
+        let stats = try world.graph.studyStats()
+        let queueDates = try world.graph.queueDueDates()
+
+        XCTAssertEqual(cards.count, 1, "无 instantiates 边的卡也应进队列（词面取自自身 comp_text）")
+        XCTAssertEqual(cards[0].text, "hello")
+        XCTAssertEqual(stats.dueCount, cards.count, "dueCount 必须与队列行数一致")
+        XCTAssertEqual(queueDates.count, cards.count, "queueDueDates 必须与队列行数一致")
+    }
+
+    /// 回归：到期队列顺序必须可复现（同一 due_at 用 card_id 兜底排序）。
+    func testDueCardsOrderIsDeterministic() throws {
+        for i in 0..<8 {
+            try seedCard(lemmaId: "L\(i)", cardId: "C\(i)", text: "word\(i)", belief: 0.40)
+        }
+        let first = try world.graph.dueCards(limit: 100).map(\.cardId)
+        for _ in 0..<5 {
+            XCTAssertEqual(try world.graph.dueCards(limit: 100).map(\.cardId), first,
+                           "同一数据下队列顺序必须稳定")
+        }
+    }
 }

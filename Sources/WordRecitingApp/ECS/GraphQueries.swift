@@ -176,9 +176,19 @@ final class GraphQueries: @unchecked Sendable {
     /// db 版本（System 事务内复用）。
     /// 匹配策略（分层）：
     ///   1. **精确相等**（COLLATE NOCASE，走 idx_comp_text_text_a 索引）——最明确
-    ///   2. **前缀范围匹配**（[textA, textA+\u{FFFF}] 区间，同样走 NOCASE 索引），
-    ///      取 `length(text_a)` 最短 —— 兼容 "abandon[ə'bændən]" / "abandon (v.)" 带尾巴 headword
-    /// @ai: 不再用 LOWER()（会使 NOCASE 索引失效，10 万词级查询退化全表扫描）。
+    ///   2. **脏 headword 前缀匹配**：仅当查询串之后紧跟的是**标记/括注**时才认作「同一词的脏尾巴」。
+    ///      覆盖两个导入器的真实格式：
+    ///        Anki 媒体型 `abandon<div>[sound:…]` / `aggregate&nbsp;…` / `collapse (v)<div>`
+    ///        TOEFL 音标型 `abandon[ə'bændən]` / `adversely['ædvə:sli]`（`[`、`(`、`/` 开头）
+    /// @ai: 旧实现是纯前缀匹配，任何「以查询串开头的更长的词」都会被错配——
+    ///      实测 `blank`→`blanket`、`kill`→`killer`、`confront`→`confrontation`、
+    ///      `vie`→`view`、`be`→`be inclined to`（1427 个正常单词受影响）。
+    ///      而本方法被 findOrCreateLemma / ImportSystem 当**存在性判断**用，
+    ///      错配会让卡片的 instantiates 边挂到别的词上（静默数据污染）。
+    ///      收紧后：脏 headword 仍解析，词形错配降为 0；
+    ///      多词短语（`de facto` / `per capita`）只认精确整串，不再被单词前缀误命中。
+    ///      **不接受裸空格作尾巴**——那会让 `be` 命中短语 `be inclined to`。
+    ///      不再用 LOWER()（会使 NOCASE 索引失效，10 万词级查询退化全表扫描）。
     func findLemmaId(_ db: Database, byTextA textA: String) throws -> EntityID? {
         let exact = try String.fetchOne(
             db,
@@ -192,7 +202,7 @@ final class GraphQueries: @unchecked Sendable {
             arguments: [textA])
         if let exact { return exact }
 
-        // 前缀范围匹配 + 长度最短 = 最干净的那条
+        // 脏尾巴判定：查询串之后第 1 个字符是标记/括注起始符，或是 " ("（词性括注）。
         let upper = textA + "\u{FFFF}"
         return try String.fetchOne(
             db,
@@ -203,10 +213,12 @@ final class GraphQueries: @unchecked Sendable {
             WHERE n.kind = 'lemma'
               AND t.text_a >= ? COLLATE NOCASE
               AND t.text_a < ? COLLATE NOCASE
+              AND (substr(t.text_a, length(?) + 1, 1) IN ('<', '&', '[', '{', '(')
+                   OR substr(t.text_a, length(?) + 1, 2) = ' (')
             ORDER BY LENGTH(t.text_a) ASC
             LIMIT 1
             """,
-            arguments: [textA, upper])
+            arguments: [textA, upper, textA, textA])
     }
 
     // MARK: - 6. 同义词（maps_to + comp_edge_weighted）

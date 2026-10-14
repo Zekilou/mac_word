@@ -55,13 +55,23 @@ struct StudySystem: System {
         // 3. 写 review_event（节点 + 组件 + produces 边）
         let eventId = "review-\(UUID().uuidString)"
         try world.registry.insertNode(db, id: eventId, kind: .event, createdAt: now)
+        // @ai: `elapsedDays` 语义是「距上次复习的真实天数」（遗忘曲线的横轴）。
+        //      旧实现写的是 `previousInterval`（**计划**间隔）→ 与 lastIvl 完全重复，
+        //      复习晚了 30 天的词会被画进它「计划」的 7 天桶里，曲线失真、不是遗忘曲线。
+        //      这里用 `now - lastReviewedAt` 计算真实经过天数；首次复习（无上次记录）为 nil。
+        let elapsedDays: Double?
+        if let last = old.lastReviewedAt {
+            elapsedDays = max(0, now.timeIntervalSince(last) / 86400.0)
+        } else {
+            elapsedDays = nil
+        }
         try world.registry.upsertComponent(db, ReviewEventComponent(
             entityId: eventId,
             targetCardId: context.cardId,
             ratedAt: now,
             rating: rating.rawValue,
             respondedMs: nil,
-            elapsedDays: previousInterval,
+            elapsedDays: elapsedDays,
             scheduledInterval: interval,
             deltaStability: interval - previousInterval,
             deltaDifficulty: (newState.difficulty ?? 2.5) - (old.difficulty ?? 2.5),

@@ -20,13 +20,16 @@ struct SynonymManagerView: View {
     }
 
     private func content(vm: SynonymManagerViewModel) -> some View {
-        HSplitView {
+        // @ai: 禁用 HSplitView（macOS 27 beta 拖分栏崩溃，见 ui-redesign-design.md）。
+        //      固定宽左面板 + Divider + 弹性右列表（与 ReadingView 一致）。
+        HStack(spacing: 0) {
             // 左：添加面板
             addPanel(vm: vm)
-                .frame(minWidth: 300, idealWidth: 360, maxWidth: 480)
+                .frame(width: 380)
             Divider()
             // 右：映射列表
             mappingList(vm: vm)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

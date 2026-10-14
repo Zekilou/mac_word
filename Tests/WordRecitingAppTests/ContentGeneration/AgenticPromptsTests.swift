@@ -138,6 +138,34 @@ final class AgenticPromptsTests: XCTestCase {
         XCTAssertEqual(AgenticPrompts.extractMarkedBody("===ARTICLE_START===半截"), "半截")
     }
 
+    /// 回归：结束标记出现在开标记**之前**时不得崩溃。
+    /// @ai: 旧实现独立查找 START/END，`start.upperBound > end.lowerBound` 会让
+    ///      String 切片 trap（SIGTRAP 崩溃）。提示词里同时给了两个标记模板，
+    ///      小模型回显指令（先复读 END）是常态，因此这条必须防住。
+    func testExtractMarkedBodyEndMarkerBeforeStartDoesNotCrash() {
+        let cases = [
+            "===ARTICLE_END=== junk ===ARTICLE_START=== real content",
+            "===ARTICLE_END===\n===ARTICLE_START===\nBody here.",
+            "=== ARTICLE_END ===\n=== ARTICLE_START ===\nBody here.",
+        ]
+        for raw in cases {
+            let out = AgenticPrompts.extractMarkedBody(raw)
+            XCTAssertTrue(out.contains("real content") || out.contains("Body here."),
+                          "应取开标记之后的内容，实际：\(out.prefix(40))")
+        }
+    }
+
+    /// 回归：重复的结束标记不得崩溃，且取「第一个开标记之后」的内容。
+    func testExtractMarkedBodyDuplicateEndMarkers() {
+        let out = AgenticPrompts.extractMarkedBody(
+            "===ARTICLE_START=== body ===ARTICLE_END=== trailing ===ARTICLE_END===")
+        XCTAssertEqual(out, "body")
+        // 开标记在中间、前面还有噪声结束标记
+        let out2 = AgenticPrompts.extractMarkedBody(
+            "note ===ARTICLE_END=== then ===ARTICLE_START=== good ===ARTICLE_END===")
+        XCTAssertEqual(out2, "good")
+    }
+
     // MARK: - 标记容错（小模型变体）
 
     func testExtractMarkedBodyTolerantVariants() {

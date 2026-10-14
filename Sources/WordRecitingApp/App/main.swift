@@ -10,6 +10,12 @@ app.run()
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
 
+    /// 安装标准主菜单（在窗口出现前完成，保证 ⌘Q/⌘W/⌘C/⌘V 从第一刻起可用）。
+    /// @ai: 纯 AppKit 壳不会自动获得标准菜单；不装会让复制/粘贴/退出全部失效（见 AppMainMenu）。
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        AppMainMenu.install()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let visualEffectView = NSVisualEffectView()
         visualEffectView.material = .headerView
@@ -40,6 +46,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
         window.makeKeyAndOrderFront(nil)
         self.window = window
+    }
+
+    /// 关闭最后一个窗口即退出应用。
+    /// @ai: 本项目是单一内容窗口的应用（非文档型）。不实现此回调时，关窗后进程仍在后台运行，
+    ///      而窗口实例一次性创建、没有 reopen 处理 → 用户既看不到窗口也无法再用 ⌘W 关掉它，
+    ///      只能去活动监视器杀进程。
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+
+    /// 点击 Dock 图标且无可见窗口时重新开窗（配合上面的「关窗即退出」，此路径用于
+    /// 窗口被最小化/隐藏等仍存活的情形，保证用户点 Dock 能找回窗口）。
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag, let window {
+            window.makeKeyAndOrderFront(nil)
+        }
+        return true
     }
 
     /// 退出前释放重量资源：停 llama-server 子进程 + 释放进程内模型缓存。

@@ -74,8 +74,27 @@ enum LlamaEngine {
     ) throws -> String {
         // 模型经共享缓存常驻复用（backend 全局初始化一次；同路径模型不重复加载，
         // 切换路径/空闲超时才释放——避免每次生成把 GGUF 反复搬进搬出内存）。
-        let (model, vocab) = try LlamaModelCache.shared.session(for: modelPath)
+        // @ai: 必须走 withSession 租约——旧实现拿裸指针后在闭包外使用，
+        //      另一线程切模型 / 退出时 releaseAll() 会 free 掉正在解码的权重（use-after-free）。
+        //      闭包内不得把 model/vocab 存到外部。
+        try LlamaModelCache.shared.withSession(for: modelPath) { model, vocab in
+            try generateLocked(
+                model: model, vocab: vocab, prompt: prompt, maxTokens: maxTokens,
+                temperature: temperature, nCtx: nCtx, nThreads: nThreads, onToken: onToken)
+        }
+    }
 
+    /// 在租约保护下的实际推理（model/vocab 由 withSession 提供，全程有效）。
+    private static func generateLocked(
+        model: OpaquePointer,
+        vocab: OpaquePointer,
+        prompt: String,
+        maxTokens: Int,
+        temperature: Double,
+        nCtx: UInt32,
+        nThreads: Int32,
+        onToken: (@Sendable (String) -> Void)?
+    ) throws -> String {
         // 2. 创建上下文（每任务各自建，KV 缓存独立；模型权重共享）
         var ctxParams = llama_context_default_params()
         ctxParams.n_ctx = nCtx

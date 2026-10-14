@@ -56,6 +56,30 @@ final class WordNormalizerTests: XCTestCase {
         XCTAssertEqual(WordNormalizer.normalize("gas"), "gas")
     }
 
+    /// 回归：本身以 -s 结尾的单数词不得被砍掉尾字母。
+    /// @ai: 旧实现只看输入长度，`class`→`clas`、`process`→`proces`、`business`→`busines`，
+    ///      导致单数与复数归一化成**两个不同 lemma**，违背「全库唯一 key」契约。
+    func testSingularSWordsAreNotStripped() {
+        for w in ["class", "process", "glass", "business", "address", "focus",
+                  "status", "virus", "campus", "analysis", "basis", "crisis"] {
+            XCTAssertEqual(WordNormalizer.normalize(w), w,
+                           "\(w) 是单数词，不应被 -s 剥离")
+        }
+    }
+
+    /// 回归：单数与复数必须归一化到同一 lemma（key 唯一性契约）。
+    func testSingularAndPluralNormalizeToSameKey() {
+        let pairs = [("class", "classes"), ("process", "processes"),
+                     ("glass", "glasses"), ("business", "businesses"),
+                     ("address", "addresses"), ("box", "boxes"),
+                     ("battle", "battles"), ("book", "books")]
+        for (singular, plural) in pairs {
+            XCTAssertEqual(WordNormalizer.normalize(singular),
+                           WordNormalizer.normalize(plural),
+                           "\(singular)/\(plural) 应归一化到同一 lemma")
+        }
+    }
+
     // MARK: - 清洗：剥离音标 / 词性尾巴
 
     func testCleansPhoneticTail() {

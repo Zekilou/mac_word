@@ -110,19 +110,76 @@ final class ImportSystemTests: XCTestCase {
         XCTAssertEqual(d2, 5)
     }
 
-    // MARK: - 事务原子性
+    // MARK: - 幂等 / 事务原子性
 
-    func testImportRollsBackOnDuplicateNodeId() throws {
-        // 先手动插入一个冲突的 node
-        try world.registry.insertNode(id: "deck-1", kind: .deck, createdAt: now)
-
+    /// 回归：重复导入（或批内重复行）不得因 UNIQUE 冲突整体失败。
+    /// @ai: 节点 id 是确定式的（CSV: lemma-<deck>-<词> / card-<deck>-<正面>），
+    ///      旧实现在已存在时直接抛错并回滚**整个**导入，
+    ///      用户看到「导入失败」且一条都没进（重复导入同一文件、或文件里有同形行都会中招）。
+    func testReimportSameBatchIsIdempotent() throws {
         let batch = makeBatch()
-        // ImportSystem 插 deck-1 时 PK 冲突 → 抛错 → 整个事务回滚
-        XCTAssertThrowsError(try world.run(ImportSystem(), context: batch))
+        try world.run(ImportSystem(), context: batch)
+        let nodesAfterFirst = try count("SELECT COUNT(*) FROM nodes")
+        let textsAfterFirst = try count("SELECT COUNT(*) FROM comp_text")
 
-        // 回滚后：batch 里的 card-0 不应存在
-        XCTAssertNil(try world.registry.fetchNode(id: "card-0"))
-        XCTAssertEqual(try count("SELECT COUNT(*) FROM comp_text"), 0)
+        // 第二次导入同一 batch：不抛错、不重复建节点
+        XCTAssertNoThrow(try world.run(ImportSystem(), context: batch))
+        XCTAssertEqual(try count("SELECT COUNT(*) FROM nodes"), nodesAfterFirst)
+        XCTAssertEqual(try count("SELECT COUNT(*) FROM comp_text"), textsAfterFirst)
+    }
+
+    /// 回归：重复导入**不得重置**已复习卡片的调度进度。
+    /// @ai: 若复用已有卡片时仍 upsert 初始 schedule_state，
+    ///      用户的 reps / due_at / factor 会被打回「新卡」——等于重复导入即清空学习记录。
+    func testReimportDoesNotResetScheduleProgress() throws {
+        // 用带 scheduleStates 的 batch（makeBatch 不含调度状态，无从验证重置）
+        let batch = makeLemmaBatch(deckId: "deck-R", words: [("run", "跑")])
+        try world.run(ImportSystem(), context: batch)
+        XCTAssertGreaterThan(try count("SELECT COUNT(*) FROM comp_schedule_state"), 0,
+                             "前提：本 batch 应写入初始调度状态")
+
+        // 模拟用户已复习到第 7 次、间隔 30 天
+        let reviewed = Date(timeIntervalSince1970: 1_800_000_000)
+        let future = reviewed.addingTimeInterval(30 * 86400)
+        try appDB.dbWriter.write { db in
+            try db.execute(sql: """
+                UPDATE comp_schedule_state
+                SET reps = 7, interval_days = 30, difficulty = 2.5,
+                    due_at = ?, last_reviewed_at = ?
+                """, arguments: [future, reviewed])
+        }
+
+        try world.run(ImportSystem(), context: batch)
+
+        let rows = try appDB.dbWriter.read { db in
+            try Row.fetchAll(db, sql: """
+                SELECT reps, interval_days, due_at FROM comp_schedule_state
+                """)
+        }
+        XCTAssertFalse(rows.isEmpty)
+        for row in rows {
+            XCTAssertEqual(row["reps"] as Int?, 7, "重复导入不得把 reps 打回 0")
+            let interval: Double? = row["interval_days"]
+            XCTAssertEqual(interval ?? -1, 30, accuracy: 0.0001)
+            XCTAssertNotNil(row["due_at"] as Date?, "due_at 不得被重置为导入时刻")
+        }
+    }
+
+    /// 事务原子性：System 抛错时整批回滚（保持既有语义）。
+    func testImportRollsBackWhenSystemThrows() throws {
+        // 用一个必抛错的 System 验证 World.run 的回滚语义未被幂等改动破坏
+        struct ThrowingSystem: System {
+            static let requiresAll: [ComponentID] = []
+            typealias Context = Void
+            func execute(world: World, db: Database, entities: [EntityID], context: Void) throws {
+                try world.registry.insertNodeIfAbsent(
+                    db, id: "should-be-rolled-back", kind: .card, createdAt: Date())
+                throw ImportTestError.boom
+            }
+        }
+        XCTAssertThrowsError(try world.run(ThrowingSystem(), context: ()))
+        XCTAssertNil(try world.registry.fetchNode(id: "should-be-rolled-back"),
+                     "抛错后必须整事务回滚")
     }
 
     // MARK: - 空壳 System 可被 World.run 调用
@@ -207,3 +264,6 @@ final class ImportSystemTests: XCTestCase {
             [lemmaId]), 2)
     }
 }
+
+/// 测试用错误（验证事务回滚）。
+enum ImportTestError: Error { case boom }

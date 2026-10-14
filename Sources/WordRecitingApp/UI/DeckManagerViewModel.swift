@@ -31,6 +31,9 @@ final class DeckManagerViewModel {
 
     /// 导入文件：自动识别 .apkg / .csv / .tsv。
     /// 导入任务托管到全局活动中心执行，切页/销毁 View 不中断；完成自动落库刷新。
+    /// @ai: 所有提前返回的分支都必须复位 `isImporting`，否则按钮 `.disabled(isImporting)`
+    ///      会被永久卡住（导入一个不支持的格式后，再也点不动「导入词库」）。
+    ///      进度同时写进 `importProgress`（页面进度条数据源，旧实现恒为 0）。
     func importFile(at url: URL) {
         isImporting = true
         importProgress = 0
@@ -40,7 +43,8 @@ final class DeckManagerViewModel {
         let activityID = GlobalActivityCenter.shared.begin(
             title: "导入词库", icon: "square.and.arrow.down",
             progress: 0.0, message: "解析中…")
-        GlobalActivityCenter.shared.run(activityID) {
+
+        GlobalActivityCenter.shared.run(activityID) { [weak self] in
             // security-scoped 访问权限在任务执行期间保持
             let accessed = url.startAccessingSecurityScopedResource()
             defer { if accessed { url.stopAccessingSecurityScopedResource() } }
@@ -48,30 +52,30 @@ final class DeckManagerViewModel {
                 let ext = url.pathExtension.lowercased()
                 let batch: ImportBatch
 
+                // 进度回调：同时更新全局活动中心与页面进度条
+                let onProgress: @Sendable (Double) -> Void = { p in
+                    Task { @MainActor in
+                        GlobalActivityCenter.shared.update(activityID, progress: p)
+                        self?.importProgress = p
+                    }
+                }
+
                 if ["apkg", "colpkg"].contains(ext) {
                     let importer = AnkiImporter()
                     guard importer.canImport(url: url) else {
-                        await MainActor.run { [weak self] in self?.errorMessage = "无法识别此 .apkg 文件" }
+                        await MainActor.run { self?.finishImportWithError("无法识别此 .apkg 文件") }
                         return
                     }
-                    batch = try await importer.readNodes(from: url) { @Sendable p in
-                        Task { @MainActor in
-                            GlobalActivityCenter.shared.update(activityID, progress: p)
-                        }
-                    }
+                    batch = try await importer.readNodes(from: url, progress: onProgress)
                 } else if ["csv", "tsv", "txt"].contains(ext) {
                     let importer = CSVImporter()
                     guard importer.canImport(url: url) else {
-                        await MainActor.run { [weak self] in self?.errorMessage = "无法识别此 CSV 文件" }
+                        await MainActor.run { self?.finishImportWithError("无法识别此 CSV 文件") }
                         return
                     }
-                    batch = try await importer.readNodes(from: url) { @Sendable p in
-                        Task { @MainActor in
-                            GlobalActivityCenter.shared.update(activityID, progress: p)
-                        }
-                    }
+                    batch = try await importer.readNodes(from: url, progress: onProgress)
                 } else {
-                    await MainActor.run { [weak self] in self?.errorMessage = "不支持的文件格式：.\(ext)" }
+                    await MainActor.run { self?.finishImportWithError("不支持的文件格式：.\(ext)") }
                     return
                 }
 
@@ -82,6 +86,7 @@ final class DeckManagerViewModel {
                 let failureCount = batch.failures.count
                 await MainActor.run { [weak self] in
                     self?.lastImportSummary = "导入完成：\(nodeCount) 节点，\(edgeCount) 关系，\(failureCount) 失败行"
+                    self?.importProgress = 1
                     self?.isImporting = false
                     self?.reload()
                 }
@@ -92,5 +97,12 @@ final class DeckManagerViewModel {
                 }
             }
         }
+    }
+
+    /// 导入早期失败的统一收尾：记录错误并复位 `isImporting`。
+    /// @ai: 不复位会让「导入词库」按钮永久 `.disabled`（见 importFile 注释）。
+    private func finishImportWithError(_ message: String) {
+        errorMessage = message
+        isImporting = false
     }
 }

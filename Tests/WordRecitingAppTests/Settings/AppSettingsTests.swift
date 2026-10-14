@@ -271,6 +271,43 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(reloaded.llamaServerLifecycle, .idleTimeout, "reset 回默认")
     }
 
+    // MARK: - API Key 机密存储（回归）
+
+    /// 回归：API Key **不得**以明文写进 UserDefaults。
+    /// @ai: 旧实现 `defaults.set(key, forKey: "settings.llmAPIKey")` → plist 明文，
+    ///      备份/任何读该目录的进程都能拿到。现走 SecretStore（生产=Keychain）。
+    @MainActor func testAPIKeyIsNotPersistedInUserDefaults() {
+        let settings = makeSettings()
+        settings.llmAPIKey = "sk-secret-123"
+
+        XCTAssertEqual(settings.llmAPIKey, "sk-secret-123", "读回应仍是完整 Key")
+        XCTAssertNil(defaults.string(forKey: "settings.llmAPIKey"),
+                     "UserDefaults 里不得残留明文 Key")
+        XCTAssertNil(defaults.data(forKey: "settings.llmAPIKey"))
+    }
+
+    /// 回归：历史版本存在 UserDefaults 的明文 Key 必须迁移到机密存储并从盘上清除。
+    @MainActor func testLegacyPlaintextAPIKeyIsMigratedOutOfUserDefaults() {
+        // 模拟旧版本写下的明文
+        defaults.set("sk-legacy-plain", forKey: "settings.llmAPIKey")
+
+        let settings = makeSettings()
+
+        XCTAssertEqual(settings.llmAPIKey, "sk-legacy-plain", "旧 Key 应可继续读到")
+        XCTAssertNil(defaults.string(forKey: "settings.llmAPIKey"),
+                     "迁移后必须删掉 UserDefaults 里的明文")
+    }
+
+    /// 恢复默认设置时必须一并清除机密存储里的 Key。
+    @MainActor func testResetClearsAPIKeyFromSecretStore() {
+        let settings = makeSettings()
+        settings.llmAPIKey = "sk-to-be-cleared"
+        settings.reset()
+
+        let reloaded = AppSettings(defaults: defaults)
+        XCTAssertTrue(reloaded.llmAPIKey.isEmpty, "reset 后 Key 应被清除（Keychain 不会随 defaults 清空）")
+    }
+
     @MainActor func testLlamaServerBinaryPathNilRemoves() {
         let settings = makeSettings()
         settings.llamaServerBinaryPath = "/tmp/llama-server"
@@ -278,4 +315,63 @@ final class AppSettingsTests: XCTestCase {
         settings.llamaServerBinaryPath = nil
         XCTAssertNil(settings.llamaServerBinaryPath, "设 nil 应移除 key")
     }
+
+    // MARK: - Observation 可观测性（回归）
+
+    /// 回归：**每一项**设置都要能被独立观测到，否则对应控件不刷新。
+    /// @ai: AppSettings 全部属性都是 UserDefaults 支撑的 computed property，
+    ///      `@Observable` 只为 stored property 生成观察支持 → 旧实现写设置不触发任何回调，
+    ///      导致「切到进程内本地不显示本地 agent 增强区」「embedding 远端输入框不出现」
+    ///      「onChange 完全不触发」等一整类失效。修复用统一 changeToken：getter access()、setter 自增。
+    ///      注意必须**逐项隔离**验证：若在一个 tracking 块里读全部属性，
+    ///      任何一项有 track() 就会让所有断言通过（测试形同虚设）。
+    @MainActor func testSettingWriteIsObservable() {
+        let settings = makeSettings()
+        // (名称, 只读该项以建立依赖, 写入)
+        let cases: [(String, () -> Void, () -> Void)] = [
+            ("generatorTier", { _ = settings.generatorTier }, { settings.generatorTier = .processLocal }),
+            ("remoteProvider", { _ = settings.remoteProvider }, { settings.remoteProvider = .openai }),
+            ("llmModel", { _ = settings.llmModel }, { settings.llmModel = "gpt-4o-mini" }),
+            ("llmBaseURL", { _ = settings.llmBaseURL }, { settings.llmBaseURL = "https://example.com/v1" }),
+            ("llmAPIKey", { _ = settings.llmAPIKey }, { settings.llmAPIKey = "sk-test" }),
+            ("localModelPath", { _ = settings.localModelPath }, { settings.localModelPath = "/tmp/m.gguf" }),
+            ("schedulerID", { _ = settings.schedulerID }, { settings.schedulerID = .sm2Frequency }),
+            ("wordScoringID", { _ = settings.wordScoringID }, { settings.wordScoringID = .criticalWords }),
+            ("embeddingVerification", { _ = settings.embeddingVerification }, { settings.embeddingVerification = .strict }),
+            ("embeddingSource", { _ = settings.embeddingSource }, { settings.embeddingSource = .remoteAPI }),
+            ("embeddingModel", { _ = settings.embeddingModel }, { settings.embeddingModel = "nomic-embed-text" }),
+            ("useAgentSidecar", { _ = settings.useAgentSidecar }, { settings.useAgentSidecar = true }),
+            ("useLocalAgentEnhancement", { _ = settings.useLocalAgentEnhancement }, { settings.useLocalAgentEnhancement = true }),
+            ("llamaServerBinaryPath", { _ = settings.llamaServerBinaryPath }, { settings.llamaServerBinaryPath = "/tmp/bin" }),
+            ("llamaServerLifecycle", { _ = settings.llamaServerLifecycle }, { settings.llamaServerLifecycle = .persistent }),
+            ("contextWindow", { _ = settings.contextWindow }, { settings.contextWindow = 4096 }),
+            ("maxOutputTokens", { _ = settings.maxOutputTokens }, { settings.maxOutputTokens = 900 }),
+            ("defaultTargetCount", { _ = settings.defaultTargetCount }, { settings.defaultTargetCount = 12 }),
+            ("defaultArticleLength", { _ = settings.defaultArticleLength }, { settings.defaultArticleLength = 500 }),
+            ("defaultWordFilter", { _ = settings.defaultWordFilter }, { settings.defaultWordFilter = "unlearned" }),
+            ("defaultRandomCount", { _ = settings.defaultRandomCount }, { settings.defaultRandomCount = 8 }),
+            ("appearanceMode", { _ = settings.appearanceMode }, { settings.appearanceMode = .dark }),
+            ("apiConfigs", { _ = settings.apiConfigs }, {
+                settings.apiConfigs = [APIConfig(
+                    id: "x", name: "x", provider: .ollama,
+                    model: "qwen2.5", baseURL: "http://localhost:11434/v1", apiKey: "")]
+            }),
+            ("activeAPIConfigID", { _ = settings.activeAPIConfigID }, { settings.activeAPIConfigID = "x" }),
+        ]
+        for (name, read, write) in cases {
+            let fired = FiredBox()
+            withObservationTracking {
+                read()   // 只读该项 → 依赖只落在该项上
+            } onChange: {
+                fired.value = true
+            }
+            write()
+            XCTAssertTrue(fired.value, "写入 \(name) 应触发 Observation 回调（否则 UI 不刷新）")
+        }
+    }
+}
+
+/// onChange 回调在非隔离上下文执行，用引用容器承载结果（避免 Swift 6 捕获 var 报错）。
+private final class FiredBox: @unchecked Sendable {
+    var value = false
 }

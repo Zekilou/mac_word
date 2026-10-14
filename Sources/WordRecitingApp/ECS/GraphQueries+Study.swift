@@ -55,33 +55,32 @@ extension GraphQueries {
 
     /// 到期卡片队列（含从未学过的"新卡"）：按到期时间升序（最紧迫优先）。
     /// **排除**「用户显式标记会（mastery ≥ 1.999）」或「模型高置信（belief ≥ beliefCutoff）」的词。
-    /// @ai: 概率主口径——模型认为已经会的词不再进背诵队列；要复习需先改回不会。
+    /// @ai: 概率主口径——模型认为已经会的词不再进队列；要复习需先改回不会。
     /// 每张卡附带词面（text_a/text_b）与 lemmaId，供闪卡 UI 使用。
+    /// **行集与 `dueCount` / `queueDueDates` 严格一致**：三者共用 `dueQueueFrom` 的连接与谓词，
+    /// 禁止各写一份（历史 bug：dueCards 用 INNER JOIN、dueCount 用 LEFT JOIN，
+    /// CSV `front,back` 导入的卡片没有 instantiates 边 → UI 报「今日到期 N」但队列为空）。
     func dueCards(limit: Int = 100, now: Date = Date()) throws -> [CardListItem] {
         try database.dbWriter.read { db in
             let sql = """
             SELECT
                 c.id            AS card_id,
-                t.entity_id     AS lemma_id,
-                t.text_a        AS text,
-                t.text_b        AS definition,
+                COALESCE(inst_edge.dst_id, c.id) AS lemma_id,
+                COALESCE(lt.text_a, ct.text_a)   AS text,
+                COALESCE(lt.text_b, ct.text_b)   AS definition,
                 ss.due_at       AS due_at,
                 ss.interval_days AS interval_days,
                 ss.reps         AS reps,
                 uk.mastery      AS mastery,
                 uk.seen_count   AS seen_count,
                 mb.belief       AS belief
-            FROM nodes c
-            JOIN edges inst_edge ON inst_edge.src_id = c.id AND inst_edge.rel_type = 'instantiates'
-            JOIN comp_text t ON t.entity_id = inst_edge.dst_id
-            LEFT JOIN comp_schedule_state ss ON ss.entity_id = c.id
-            LEFT JOIN comp_user_known uk ON uk.entity_id = t.entity_id
-            LEFT JOIN comp_mastery_belief mb ON mb.entity_id = t.entity_id
-            WHERE c.kind = 'card'
+            \(Self.dueQueueFrom)
               AND (ss.due_at IS NULL OR ss.due_at <= ?)
               AND (uk.mastery IS NULL OR uk.mastery < ?)
               AND (mb.belief IS NULL OR mb.belief < ?)
-            ORDER BY COALESCE(ss.due_at, '1970-01-01') ASC
+              AND COALESCE(lt.text_a, ct.text_a) IS NOT NULL
+            -- 到期时间升序；同一时间用 card_id 兜底，保证队列顺序可复现（否则同 key 行序未定义）
+            ORDER BY COALESCE(ss.due_at, '1970-01-01') ASC, c.id ASC
             LIMIT ?
             """
             let rows = try Row.fetchAll(
@@ -102,6 +101,23 @@ extension GraphQueries {
             }
         }
     }
+
+    /// 到期队列的共享 FROM + 连接（三处查询唯一来源）。
+    /// @ai: 用 LEFT JOIN 而非 INNER JOIN，使「无 instantiates 边的卡片」（CSV front/back 导入）
+    ///      也能进队列——其词面直接取卡片自身的 comp_text。
+    ///      `dueCount` / `queueDueDates` / `dueCards` 必须共同使用本常量，
+    ///      否则又会出现「统计说 N 张到期、队列一张都不给」的口径分裂。
+    ///      额外加 `COALESCE(...text_a) IS NOT NULL` 保证只收有词面的卡（无词面无法出题）。
+    static let dueQueueFrom = """
+    FROM nodes c
+    LEFT JOIN edges inst_edge ON inst_edge.src_id = c.id AND inst_edge.rel_type = 'instantiates'
+    LEFT JOIN comp_text lt ON lt.entity_id = inst_edge.dst_id
+    LEFT JOIN comp_text ct ON ct.entity_id = c.id
+    LEFT JOIN comp_schedule_state ss ON ss.entity_id = c.id
+    LEFT JOIN comp_user_known uk ON uk.entity_id = COALESCE(inst_edge.dst_id, c.id)
+    LEFT JOIN comp_mastery_belief mb ON mb.entity_id = COALESCE(inst_edge.dst_id, c.id)
+    WHERE c.kind = 'card'
+    """
 
     /// 弱词排行：按 AGAIN 比例降序返回复习过的词（跨词库）。
     func weakLemmaDetails(limit: Int = 10, minReviews: Int = 1) throws -> [WeakLemmaStat] {
@@ -155,18 +171,14 @@ extension GraphQueries {
     }
 
     /// 复习队列内卡片的到期时间（nil = 新卡，视为立即到期），供负载预测。
-    /// @ai: 排除口径与 `dueCards` 完全一致（显式标记会 / 模型高置信不进队列）。
+    /// @ai: 排除口径与 `dueCards` 完全一致（共用 `dueQueueFrom`，显式标记会 / 模型高置信不进队列）。
     func queueDueDates() throws -> [Date?] {
         try database.dbWriter.read { db in
             let rows = try Row.fetchAll(db, sql: """
-            SELECT ss.due_at FROM nodes c
-            LEFT JOIN comp_schedule_state ss ON ss.entity_id = c.id
-            LEFT JOIN edges inst_edge ON inst_edge.src_id = c.id AND inst_edge.rel_type = 'instantiates'
-            LEFT JOIN comp_user_known uk ON uk.entity_id = inst_edge.dst_id
-            LEFT JOIN comp_mastery_belief mb ON mb.entity_id = inst_edge.dst_id
-            WHERE c.kind = 'card'
+            SELECT ss.due_at \(Self.dueQueueFrom)
               AND (uk.mastery IS NULL OR uk.mastery < ?)
               AND (mb.belief IS NULL OR mb.belief < ?)
+              AND COALESCE(lt.text_a, ct.text_a) IS NOT NULL
             """, arguments: [Self.dueMasteryCutoff, Self.dueBeliefCutoff])
             return rows.map { $0["due_at"] as Date? }
         }
@@ -182,14 +194,11 @@ extension GraphQueries {
                 SELECT COUNT(*) FROM comp_schedule_state WHERE reps > 0
                 """) ?? 0
             let dueCount = try Int.fetchOne(db, sql: """
-                SELECT COUNT(*) FROM nodes c
-                LEFT JOIN comp_schedule_state ss ON ss.entity_id = c.id
-                LEFT JOIN edges inst_edge ON inst_edge.src_id = c.id AND inst_edge.rel_type = 'instantiates'
-                LEFT JOIN comp_user_known uk ON uk.entity_id = inst_edge.dst_id
-                LEFT JOIN comp_mastery_belief mb ON mb.entity_id = inst_edge.dst_id
-                WHERE c.kind = 'card' AND (ss.due_at IS NULL OR ss.due_at <= ?)
+                SELECT COUNT(*) \(Self.dueQueueFrom)
+                  AND (ss.due_at IS NULL OR ss.due_at <= ?)
                   AND (uk.mastery IS NULL OR uk.mastery < ?)
                   AND (mb.belief IS NULL OR mb.belief < ?)
+                  AND COALESCE(lt.text_a, ct.text_a) IS NOT NULL
                 """, arguments: [now, Self.dueMasteryCutoff, Self.dueBeliefCutoff]) ?? 0
             let todayStart = Calendar.current.startOfDay(for: now)
             let reviewedToday = try Int.fetchOne(db, sql: """
