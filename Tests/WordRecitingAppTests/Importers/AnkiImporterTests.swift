@@ -173,23 +173,27 @@ final class AnkiImporterTests: XCTestCase {
         let world = World(database: appDB)
         try world.run(ImportSystem(), context: batch)
 
-        // 业务节点（deck + lemma + card），不含 edge 节点：805
+        // 业务节点（deck + lemma + card），不含 edge 节点：804
+        // @ai: 是 804 而不是 805——TOEFL 词库里有两条 `collapse`（一条带 `(v)`、
+        //      一条带 `(n)`）。剥掉词性尾巴后词面都是 `collapse`，归一化到同一个
+        //      Lemma → 402 个 note 只产生 401 个 lemma。这是**正确**的去重，
+        //      不是丢数据（两条释义通过 appendDefinition 合并到同一 lemma）。
         let nodeCount = try await appDB.dbWriter.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM nodes WHERE kind != 'edge'")
         }
-        XCTAssertEqual(nodeCount, 805)
+        XCTAssertEqual(nodeCount, 804)
 
-        // comp_text: 402 lemma + 402 card = 804
+        // comp_text: 401 lemma + 402 card = 803
         let textCount = try await appDB.dbWriter.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM comp_text")
         }
-        XCTAssertEqual(textCount, 804)
+        XCTAssertEqual(textCount, 803)
 
-        // comp_lemma_meta: 402
+        // comp_lemma_meta: 401（collapse 合并后只留首个）
         let lemmaMetaCount = try await appDB.dbWriter.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM comp_lemma_meta")
         }
-        XCTAssertEqual(lemmaMetaCount, 402)
+        XCTAssertEqual(lemmaMetaCount, 401)
 
         // comp_schedule_state: 402
         let schedCount = try await appDB.dbWriter.read { db in

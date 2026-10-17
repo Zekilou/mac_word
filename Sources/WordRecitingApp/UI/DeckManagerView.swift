@@ -50,6 +50,15 @@ struct DeckManagerView: View {
                     Text("导入中…").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                // 词书从哪来——用户新装 App 时不知道 .apkg 去哪下载，
+                // 这里给明文入口（AnkiWeb 官方共享词库 + CSV 格式说明）。
+                Button {
+                    NSWorkspace.shared.open(Self.ankiWebURL)
+                } label: {
+                    Label("去 AnkiWeb 找词书", systemImage: "safari")
+                }
+                .buttonStyle(.borderless)
+                .help("打开 AnkiWeb 共享词库，下载 .apkg 后可在此导入")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -66,16 +75,7 @@ struct DeckManagerView: View {
 
             // Deck 列表
             if vm.decks.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "tray")
-                        .font(.system(size: 40))
-                        .foregroundStyle(.tertiary)
-                    Text("尚未导入任何词库").foregroundStyle(.secondary)
-                    Text("点击上方「导入词库」按钮选择 .apkg 或 .csv 文件")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                emptyState(vm)
             } else {
                 // @ai: 不用 List（NSTableView），避免 macOS 27 FocusBridge 布局时 key view loop 崩溃
                 ScrollView {
@@ -105,8 +105,85 @@ struct DeckManagerView: View {
         }
     }
 
-    private func deckRow(_ deck: DeckSummary) -> some View {
-        HStack(spacing: 12) {
+    /// 空状态：没有词库时最关键的不是「按钮在哪」，而是「词书从哪来」。
+    /// @ai: 新用户不知道 .apkg 是什么、去哪下载——这里把三条获取路径写清楚，
+    ///      并直接给出 AnkiWeb 入口（最主流）、CSV 格式说明（自己整理词表）。
+    private func emptyState(_ vm: DeckManagerViewModel) -> some View {
+        VStack(spacing: 18) {
+            Image(systemName: "tray")
+                .font(.system(size: 40))
+                .foregroundStyle(.tertiary)
+            Text("还没有词库")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 12) {
+                stepRow(
+                    number: 1,
+                    title: "去 AnkiWeb 下载词书",
+                    detail: "AnkiWeb 有大量免费共享词书（四六级 / 考研 / 托福 / 雅思 / GRE…），"
+                          + "下载后是 .apkg 文件。",
+                    actionLabel: "打开 AnkiWeb",
+                    action: { NSWorkspace.shared.open(Self.ankiWebURL) })
+                stepRow(
+                    number: 2,
+                    title: "导入下载的 .apkg",
+                    detail: "点左上角「导入词库」选择刚下载的文件，几十秒即可导入完成。",
+                    actionLabel: nil, action: nil)
+                stepRow(
+                    number: 3,
+                    title: "或者导入自己的 CSV",
+                    detail: "表头需包含 lemma/headword/word 之一（词），可选 front/back、pos、音标、tags。"
+                          + "UTF-8 编码。",
+                    actionLabel: nil, action: nil)
+            }
+            .frame(maxWidth: 520, alignment: .leading)
+
+            HStack(spacing: 10) {
+                Button {
+                    showFilePicker = true
+                } label: {
+                    Label("导入词库", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(vm.isImporting)
+            }
+            .padding(.top, 4)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// 引导步骤行：序号徽标 + 标题 + 说明 +（可选）行内按钮。
+    private func stepRow(
+        number: Int, title: String, detail: String,
+        actionLabel: String?, action: (() -> Void)?
+    ) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text("\(number)")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 20, height: 20)
+                .background(Circle().fill(Color.accentColor))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.callout.weight(.medium))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let actionLabel, let action {
+                    Button(actionLabel, action: action)
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// AnkiWeb 共享词库首页。
+    private static let ankiWebURL = URL(string: "https://ankiweb.net/shared/decks")!
+
+    private func deckRow(_ deck: DeckSummary) -> some View {        HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(deck.name).fontWeight(.medium)
                 HStack(spacing: 8) {

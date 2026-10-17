@@ -153,8 +153,10 @@ final class AnkiImporter: WordImporter, Sendable {
             let values = note.flds.components(separatedBy: "\u{1F}")
             let m = Self.mapFields(fieldNames, values: values)
             nodes.append(.init(id: lemmaId, kind: .lemma, createdAt: now))
-            // 清洗 HTML/媒体标签：text_a 必须是干净单词，便于改写匹配
-            let cleanA = Self.sanitizeHTML(m.headword) ?? ""
+            // 清洗 HTML/媒体标签，并剥掉词面尾巴：
+            // text_a 是 Lemma 的匹配键（词频表按纯词形查），必须只留单词本身。
+            // `abandon<...>[sound:…]</div><div>[ə'bændən]</div>` → `abandon`
+            let cleanA = TextSanitizer.cleanHeadword(m.headword) ?? ""
             let cleanB = Self.sanitizeHTML(m.definition)
             let cleanPhon = Self.sanitizeHTML(m.phonetic)
             let tc = TextComponent(entityId: lemmaId, textA: cleanA, textB: cleanB, language: nil)

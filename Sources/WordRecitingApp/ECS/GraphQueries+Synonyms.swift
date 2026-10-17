@@ -30,8 +30,9 @@ extension GraphQueries {
             return rows.map { row in
                 LemmaCandidate(
                     lemmaId: row["lemma_id"],
-                    text: row["text"] ?? "",
-                    definition: row["definition"])
+                    text: TextSanitizer.clean(row["text"], preserveLineBreaks: false) ?? "",
+                    definition: TextSanitizer.clean(
+                        row["definition"], preserveLineBreaks: true))
             }
         }
     }
@@ -65,8 +66,11 @@ extension GraphQueries {
                     edgeId: row["edge_id"],
                     fromLemmaId: row["from_id"],
                     toLemmaId: row["to_id"],
-                    fromText: row["from_text"] ?? "",
-                    toText: row["to_text"] ?? "",
+                    // @ai: 两端词面同样要清洗，否则同义词列表会显示 HTML 残留。
+                    fromText: TextSanitizer.clean(
+                        row["from_text"], preserveLineBreaks: false) ?? "",
+                    toText: TextSanitizer.clean(
+                        row["to_text"], preserveLineBreaks: false) ?? "",
                     weight: row["weight"] ?? 0.5,
                     sourceType: row["source_type"] ?? "manual",
                     createdAt: row["created_at"])

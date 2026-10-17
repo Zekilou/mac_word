@@ -40,7 +40,10 @@ extension GraphQueries {
             """
             let rows = try Row.fetchAll(db, sql: sql, arguments: [deckId, limit])
             return rows.map { row in
-                (id: row["entity_id"], text: row["text_a"] ?? "")
+                // @ai: 必须清洗——脏词面（Anki HTML / [sound:] 残留）会原样出现在
+                //      造文页选词清单里，也可能被当成目标词写进 prompt。
+                (id: row["entity_id"],
+                 text: TextSanitizer.clean(row["text_a"], preserveLineBreaks: false) ?? "")
             }
         }
     }

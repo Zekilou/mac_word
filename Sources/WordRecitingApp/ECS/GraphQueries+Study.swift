@@ -143,8 +143,9 @@ extension GraphQueries {
             return rows.map { row in
                 WeakLemmaStat(
                     lemmaId: row["lemma_id"],
-                    text: row["text"] ?? "",
-                    definition: row["definition"],
+                    text: TextSanitizer.clean(row["text"], preserveLineBreaks: false) ?? "",
+                    definition: TextSanitizer.clean(
+                        row["definition"], preserveLineBreaks: true),
                     reviewCount: row["review_count"] ?? 0,
                     againCount: row["again_count"] ?? 0)
             }

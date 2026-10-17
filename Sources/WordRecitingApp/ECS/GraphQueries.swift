@@ -268,10 +268,13 @@ final class GraphQueries: @unchecked Sendable {
             """
             let rows = try Row.fetchAll(db, sql: sql, arguments: [mode.rawValue, limit])
             return rows.map { row in
-                ArticleHistoryItem(
+                // @ai: 预览也要清洗——历史侧栏此前会直接显示正文里的 HTML/媒体标记。
+                let preview = TextSanitizer.clean(
+                    row["text_a"], preserveLineBreaks: false) ?? ""
+                return ArticleHistoryItem(
                     id: row["id"],
                     createdAt: row["created_at"],
-                    bodyPreview: String((row["text_a"] ?? "").prefix(100)),
+                    bodyPreview: String(preview.prefix(100)),
                     generatorId: row["generator_id"] ?? "")
             }
         }

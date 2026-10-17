@@ -48,4 +48,18 @@ enum TextSanitizer {
         let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
+
+    /// 词面专用清洗：HTML/媒体标记清洗 → 再剥掉音标 / 词性尾巴。
+    /// `abandon<div>[sound:…]</div><div>[ə'bændən]</div>` → `abandon`
+    /// @ai: 词面（text_a）是 **Lemma 的匹配键**，必须只留纯词形：
+    ///      - 词频表按纯词形查 band/rank（`abandon [ə'bændən]` 查不到）
+    ///      - 选词清单 / 卡片正面只该显示单词本身
+    ///      音标另有归属（comp_lemma_meta.phonetic_*），不该混在词面里。
+    ///      清洗后为空则回退到「仅去 HTML」的结果，避免把整行洗没。
+    static func cleanHeadword(_ raw: String?) -> String? {
+        guard let cleaned = clean(raw, preserveLineBreaks: false) else { return nil }
+        let stripped = WordNormalizer.clean(cleaned)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return stripped.isEmpty ? cleaned : stripped
+    }
 }

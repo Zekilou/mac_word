@@ -18,8 +18,11 @@ enum WordNormalizer {
         return stripSuffixes(cleaned.lowercased())
     }
 
-    /// 清洗：剥离 [音标] 尾巴；空格后的词性/简短标记（v. / (n) / adj. 等）只取主词；
+    /// 清洗：剥离 `[音标]` / `/音标/` 尾巴与词性标记；空格后的词性/简短标记只取主词；
     /// 其余保留（词组如 "take up" 原样返回）。
+    /// @ai: 音标有两种写法——方括号 `abandon [ə'bændən]`（本库 TOEFL 词库）
+    ///      与斜杠 `rotate /rou'teit/`（另一批词库）。两者都不是词形的一部分，
+    ///      留着会让词频表查不到、选词清单显示脏词面。
     static func clean(_ word: String) -> String {
         let trimmed = word.trimmingCharacters(in: .whitespaces)
         // 剥离 [音标] 尾巴（保留空子序列："[音标]" → 首段为 ""）
@@ -32,7 +35,24 @@ enum WordNormalizer {
            Self.isPosMark(String(last.lowercased())) {
             return parts.dropLast().joined(separator: " ")
         }
+        // 斜杠音标尾巴：`rotate /rou'teit/` → `rotate`
+        // 仅当末段是「以 / 开头且以 / 结尾」的音标块时才剥，
+        // 避免误伤 `and/or`、`24/7` 这类真实含斜杠的词。
+        if parts.count > 1, let last = parts.last, Self.isSlashPhonetic(last) {
+            return parts.dropLast().joined(separator: " ")
+        }
         return parts.joined(separator: " ")
+    }
+
+    /// 是否为斜杠音标块（`/rou'teit/`、`/'soulə/`）：首尾都是 `/`，且内部含重音/音标符号。
+    private static func isSlashPhonetic(_ token: String) -> Bool {
+        guard token.count > 2,
+              token.hasPrefix("/"), token.hasSuffix("/") else { return false }
+        let inner = token.dropFirst().dropLast()
+        // 音标块通常含重音符号（' 或 ˌ）或非 ASCII 音标字符；
+        // 纯 ASCII 字母/数字（如 `and/or`）不算音标，避免误剥。
+        return inner.contains("'") || inner.contains("ˌ") || inner.contains("ˈ")
+            || inner.contains { !$0.isASCII }
     }
 
     /// 常见词性 / 简短标记（去符号后比对，如 "(v.)" → "v"）。

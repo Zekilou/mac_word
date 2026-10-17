@@ -8,6 +8,7 @@ import GRDB
 /// v4：`comp_region` / `comp_word_event` / `comp_lemma_frequency`。
 /// v5：`comp_mastery_belief`（BKT 后验概率）。
 /// v6：旧数据事件回填（mastery / seen_count → 词事件，让 BKT 后验对历史数据有值）。
+/// v7：清洗存量脏文本（Anki HTML / [sound:] / 实体残留）。
 enum SchemaMigrator {
     static func migrate(_ writer: some DatabaseWriter) throws {
         var m = DatabaseMigrator()
@@ -113,6 +114,28 @@ enum SchemaMigrator {
         // @ai: 只写事件；后验由启动时 VocabularyMaintenance.backfillMastery 重算。
         m.registerMigration("v6_legacy_event_backfill") { db in
             try LegacyEventBackfill.run(db)
+        }
+        // v7：清洗存量脏文本。
+        // @ai: 背景——`AnkiImporter+Sanitize` 是 v1.0.0（d506dde）才加的，而用户库里的
+        //      TOEFL 词库导入于 2026-08-10（更早），headword 落库成
+        //      `abandon<div>[sound:abandon_400.mp3]</div><div>[ə'bændən]</div>`。
+        //      后果不只是「首页显示尖括号」：LemmaFrequencySystem 直接用 text_a 查词频表，
+        //      脏词面一个都查不到（实测 402 个词只有 1 个命中）→ 词频/CEFR/选词分层全部失效。
+        //      这里就地清洗 storage 层，让下游所有查询（含词频回填）重新拿到干净词面。
+        //      幂等：clean 只会收紧文本，重复执行结果不变。
+        m.registerMigration("v7_sanitize_stored_text") { db in
+            try StoredTextSanitizer.run(db)
+        }
+        // v8：剥掉词面里的音标 / 词性尾巴（`abandon [ə'bændən]` → `abandon`）。
+        // @ai: v7 只去了 HTML，音标尾巴还在，词频表依然查不到（实测 402 词仍只 1 命中）。
+        //      词面是 Lemma 的匹配键，必须只留纯词形；音标归 comp_lemma_meta.phonetic_*。
+        m.registerMigration("v8_strip_headword_tail") { db in
+            try StoredTextSanitizer.stripHeadwordTails(db)
+        }
+        // v9：斜杠音标尾巴（`rotate /rou'teit/` → `rotate`）。
+        // @ai: v8 只处理了方括号音标；另一批词库用斜杠写法，仍留在词面里。
+        m.registerMigration("v9_strip_slash_phonetic") { db in
+            try StoredTextSanitizer.stripHeadwordTails(db)
         }
         try m.migrate(writer)
     }
