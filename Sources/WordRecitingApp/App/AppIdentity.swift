@@ -8,10 +8,12 @@ enum AppIdentity {
     static let brandName = "wordincontxt"
 
     /// App 版本号（与 Info.plist CFBundleShortVersionString 保持同步）。
-    static let versionShort = "1.0.0"
+    /// @ai: 必须同步改 `scripts/create-app-bundle.sh` 的 VER_SHORT——两处不一致时
+    ///      `.app` 里显示的是 Info.plist 的值，`swift run` 显示的是这里的值。
+    static let versionShort = "1.0.1"
 
     /// Build 号（与 Info.plist CFBundleVersion 保持同步）。
-    static let versionBuild = "1"
+    static let versionBuild = "2"
 
     /// Bundle ID 前缀（反域名风格）。脚本中 Info.plist CFBundleIdentifier 与此一致。
     static let bundleID = "com.zekilou.wordincontxt"

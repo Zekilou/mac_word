@@ -27,8 +27,8 @@ done
 SPM_PRODUCT="WordRecitingApp"
 APP_NAME="wordincontxt"
 APP_DISPLAY="wordincontxt"
-VER_SHORT="1.0.0"
-VER_BUILD="1"
+VER_SHORT="1.0.1"
+VER_BUILD="2"
 BUNDLE_ID="com.zekilou.wordincontxt"
 MIN_OS="14.0"
 
