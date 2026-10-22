@@ -8,6 +8,8 @@ struct CardBrowserView: View {
     let deckId: EntityID
     let deckName: String
     @State private var vm: CardBrowserViewModel?
+    /// 待删除的卡片（非 nil 时弹二次确认）。
+    @State private var pendingCardDeletion: CardListItem?
 
     var body: some View {
         Group {
@@ -20,6 +22,21 @@ struct CardBrowserView: View {
                     m.reload()
                 }
             }
+        }
+        .confirmationDialog(
+            pendingCardDeletion.map { "删除卡片「\($0.plainText)」？" } ?? "",
+            isPresented: Binding(
+                get: { pendingCardDeletion != nil },
+                set: { if !$0 { pendingCardDeletion = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("删除", role: .destructive) {
+                if let card = pendingCardDeletion { vm?.deleteCard(card) }
+                pendingCardDeletion = nil
+            }
+            Button("取消", role: .cancel) { pendingCardDeletion = nil }
+        } message: {
+            Text("只从该词库移除这张卡片。你对这个词的「会 / 不会」标记与复习记录会保留。")
         }
     }
 
@@ -177,6 +194,17 @@ struct CardBrowserView: View {
                         masteryBadge(card)
                     }
                     Spacer()
+                    // 删除这张卡片（保留该词的全局掌握度）
+                    if let card = vm.selected, card.lemmaId == detail.lemmaId {
+                        Button(role: .destructive) {
+                            pendingCardDeletion = card
+                        } label: {
+                            Label("删除卡片", systemImage: "trash")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("从词库移除这张卡片（该词的掌握度与学习记录保留）")
+                    }
                 }
                 if let def = detail.definition, !def.isEmpty {
                     Text(def).font(.body).foregroundStyle(.primary)

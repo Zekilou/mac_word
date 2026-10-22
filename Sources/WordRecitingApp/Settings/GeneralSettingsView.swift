@@ -25,25 +25,27 @@ struct GeneralSettingsView: View {
         section("复习调度") {
             VStack(alignment: .leading, spacing: 6) {
                 Picker("调度算法", selection: $settings.schedulerID) {
-                    ForEach(SchedulerID.allCases, id: \.rawValue) { sid in
-                        Text(label(for: sid)).tag(sid)
+                    // @ai: 只列已实现的算法。FSRS v4 尚未实现，选中后会静默回退 SM-2，
+                    //      显示出来等于误导用户「已经用上更强算法」。
+                    ForEach(SchedulerID.selectableCases, id: \.rawValue) { sid in
+                        Text(sid.displayName).tag(sid)
                     }
                 }
                 .labelsHidden()
                 .frame(width: 220)
-                if settings.schedulerID == .fsrsV4 {
-                    Text("FSRS 接入中，当前仍用 SM-2")
-                        .font(.caption).foregroundStyle(.tertiary)
+                // 老版本可能已把 fsrsV4 存进 UserDefaults：明确告知正在回退，并可一键切回。
+                if !settings.schedulerID.isImplemented {
+                    HStack(spacing: 8) {
+                        Text("已选「\(settings.schedulerID.displayName)」，但该算法尚未实现，"
+                             + "实际仍按 SM-2 计复习间隔。")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        Button("切回 SM-2") { settings.schedulerID = .sm2 }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                    }
                 }
             }
-        }
-    }
-
-    private func label(for sid: SchedulerID) -> String {
-        switch sid {
-        case .sm2: return "SM-2（当前）"
-        case .sm2Frequency: return "SM-2 + 词频调制"
-        case .fsrsV4: return "FSRS v4（开发中）"
         }
     }
 

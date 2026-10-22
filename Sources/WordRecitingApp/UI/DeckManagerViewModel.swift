@@ -105,4 +105,20 @@ final class DeckManagerViewModel {
         errorMessage = message
         isImporting = false
     }
+
+    /// 删除词库（deck + 其全部卡片）。
+    /// @ai: 只删学习目标，**保留全局词汇认知**（comp_user_known / mastery_belief / 词事件）——
+    ///      一个词会不会是跨词库的全局状态，重新导入同一词库不应丢复习进度。
+    ///      UI 层必须先二次确认再调本方法（不可撤销）。
+    func deleteDeck(_ deck: DeckSummary) {
+        errorMessage = nil
+        lastImportSummary = nil
+        do {
+            try world.run(DeckCleanupSystem(), context: .delete(deckId: deck.id))
+            lastImportSummary = "已删除词库「\(deck.name)」及其 \(deck.cardCount) 张卡片"
+            reload()
+        } catch {
+            errorMessage = "删除失败：\(error)"
+        }
+    }
 }

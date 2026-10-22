@@ -18,6 +18,7 @@ struct HomeView: View {
                 if let err = vm.errorMessage {
                     Text(err).font(.caption).foregroundStyle(.red)
                 }
+                if vm.isFirstRun { welcomeCard }
                 todayHeader
                 kpiRow
                 vocabularyCard
@@ -28,6 +29,72 @@ struct HomeView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onAppear { vm.reload() }
+    }
+
+    // MARK: - 新手引导
+
+    /// 首次运行欢迎卡：三步走完就能用起来。
+    /// @ai: 新用户打开 app 时首页只有一排 0，没有任何「下一步做什么」的提示。
+    ///      这里给出最短可用路径：导词库 → 标词汇（可选）→ 开始。三处均可直达。
+    private var welcomeCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "hand.wave.fill")
+                    .foregroundStyle(Color.accentColor)
+                Text("欢迎使用 wordincontxt")
+                    .font(.headline)
+                Spacer()
+            }
+            Text("纯本地运行，不联网、不采集数据。三步开始：")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 10) {
+                welcomeStep(
+                    "1", "导入一个词库",
+                    "从 AnkiWeb 下载 .apkg，或用你自己的 CSV。也可以直接跳到第 3 步用内置词表。",
+                    label: "去导入", section: .decks)
+                welcomeStep(
+                    "2", "（可选）让我了解你的词汇量",
+                    "生成一段英文，标出不会的词，其余记为已掌握——后续选词会更贴合你。",
+                    label: "去标记", section: .vocabulary)
+                welcomeStep(
+                    "3", "开始背或开始创作",
+                    "有词库后可背诵闪卡；也可以直接选词生成一段上下文文章来读。",
+                    label: "去背诵", section: .study)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.accentColor.opacity(0.07))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.accentColor.opacity(0.3), lineWidth: 1))
+    }
+
+    private func welcomeStep(
+        _ number: String, _ title: String, _ detail: String,
+        label: String, section: AppSection
+    ) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Text(number)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(Color.accentColor))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.callout.weight(.medium))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button(label) { onNavigate(section) }
+                .buttonStyle(.link)
+                .font(.caption)
+        }
     }
 
     // MARK: - 今日

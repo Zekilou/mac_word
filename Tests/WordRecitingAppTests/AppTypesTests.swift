@@ -76,6 +76,22 @@ final class AppTypesTests: XCTestCase {
         XCTAssertEqual(SchedulerID.sm2.rawValue, "sm-2")
     }
 
+    /// @ai: 未实现的算法不能出现在设置页选项里（选中后静默回退 SM-2 会误导用户）。
+    func testSchedulerSelectableCasesExcludeUnimplemented() {
+        XCTAssertFalse(SchedulerID.selectableCases.contains(.fsrsV4),
+                       "FSRS 未实现，不应可选")
+        XCTAssertTrue(SchedulerID.selectableCases.contains(.sm2))
+        XCTAssertTrue(SchedulerID.selectableCases.contains(.sm2Frequency))
+        XCTAssertEqual(SchedulerID.fsrsV4.isImplemented, false)
+        XCTAssertEqual(SchedulerID.sm2.isImplemented, true)
+        XCTAssertEqual(SchedulerID.sm2Frequency.isImplemented, true)
+    }
+
+    func testSchedulerDisplayNamesAreUserFacing() {
+        XCTAssertEqual(SchedulerID.sm2.displayName, "SM-2（默认）")
+        XCTAssertEqual(SchedulerID.sm2Frequency.displayName, "SM-2 + 词频调制")
+    }
+
     // MARK: - DeckSourceKind
 
     func testDeckSourceKindRoundTrip() {

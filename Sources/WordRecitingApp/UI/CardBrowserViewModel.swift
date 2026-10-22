@@ -57,4 +57,21 @@ final class CardBrowserViewModel {
             errorMessage = "\(error)"
         }
     }
+
+    /// 删除单张卡片。
+    /// @ai: 只删这张卡（学习目标），该词的全局掌握度/词事件保留——
+    ///      与删词库同一口径，见 DeckCleanupSystem 注释。
+    func deleteCard(_ card: CardListItem) {
+        errorMessage = nil
+        do {
+            try world.run(DeckCleanupSystem(), context: .deleteCard(cardId: card.cardId))
+            if selected?.cardId == card.cardId {
+                selected = nil
+                detail = nil
+            }
+            reload()
+        } catch {
+            errorMessage = "删除卡片失败：\(error)"
+        }
+    }
 }

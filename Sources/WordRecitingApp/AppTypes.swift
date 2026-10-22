@@ -90,6 +90,30 @@ enum SchedulerID: String, Sendable, Codable, CaseIterable {
     case sm2 = "sm-2"
     /// SM-2 + 词频/概率调制。
     case sm2Frequency = "sm-2-frequency"
+
+    /// 是否已真正实现。FSRS v4 只有占位枚举值，`SchedulingRegistry` 会回退 SM-2。
+    /// @ai: 设置页**不应列出未实现的选项**——选中后行为静默等于 SM-2，
+    ///      用户会以为「换上更强算法了」，属于误导。
+    var isImplemented: Bool {
+        switch self {
+        case .sm2, .sm2Frequency: return true
+        case .fsrsV4: return false
+        }
+    }
+
+    /// 可在设置页选择的调度算法（过滤掉未实现的）。
+    static var selectableCases: [SchedulerID] {
+        allCases.filter(\.isImplemented)
+    }
+
+    /// 用户可见名称。
+    var displayName: String {
+        switch self {
+        case .sm2: return "SM-2（默认）"
+        case .sm2Frequency: return "SM-2 + 词频调制"
+        case .fsrsV4: return "FSRS v4（未实现）"
+        }
+    }
 }
 
 /// 选词打分策略。

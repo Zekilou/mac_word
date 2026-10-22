@@ -8,6 +8,8 @@ struct DeckManagerView: View {
     let world: World
     @State private var viewModel: DeckManagerViewModel?
     @State private var showFilePicker = false
+    /// 待删除的词库（非 nil 时弹出二次确认）。
+    @State private var pendingDeletion: DeckSummary?
 
     var body: some View {
         Group {
@@ -81,13 +83,42 @@ struct DeckManagerView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(vm.decks) { deck in
-                            NavigationLink(value: deck) {
-                                deckRow(deck)
+                            HStack(spacing: 8) {
+                                NavigationLink(value: deck) {
+                                    deckRow(deck)
+                                }
+                                .buttonStyle(.plain)
+                                Button(role: .destructive) {
+                                    pendingDeletion = deck
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                                .foregroundStyle(.red)
+                                .help("删除该词库（卡片一并删除，词汇掌握度保留）")
                             }
+                            .padding(.trailing, 16)
                         }
                     }
                 }
             }
+        }
+        // 删除二次确认：不可撤销，且要让用户知道「掌握度会保留」。
+        .confirmationDialog(
+            pendingDeletion.map { "删除词库「\($0.name)」？" } ?? "",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("删除", role: .destructive) {
+                if let deck = pendingDeletion { vm.deleteDeck(deck) }
+                pendingDeletion = nil
+            }
+            Button("取消", role: .cancel) { pendingDeletion = nil }
+        } message: {
+            Text("将删除该词库的 \(pendingDeletion?.cardCount ?? 0) 张卡片与词条学习目标。"
+                 + "你对这些词标记的「会 / 不会」与复习进度会保留（全局词汇认知，跨词库共享）。")
         }
         .fileImporter(
             isPresented: $showFilePicker,

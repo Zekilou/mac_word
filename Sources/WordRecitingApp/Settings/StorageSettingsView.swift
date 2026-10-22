@@ -21,6 +21,7 @@ struct StorageSettingsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 dataSection
+                backupSection
                 modelSection
                 cleanupSection
                 if let statusMessage {
@@ -62,6 +63,39 @@ struct StorageSettingsView: View {
                     .controlSize(.small)
                     Spacer()
                 }
+            }
+        }
+    }
+
+    // MARK: - 备份与导出
+
+    /// @ai: 用户数据只有一个 sqlite 文件，此前**没有任何导出入口**——误删或换机就全丢。
+    ///      备份走 `VACUUM INTO` 生成一致快照；词汇 CSV 可被本 app 的导入器重新读回。
+    private var backupSection: some View {
+        section("备份与导出") {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Button {
+                        backupDatabase()
+                    } label: {
+                        Label("备份数据库…", systemImage: "externaldrive.badge.timemachine")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+
+                    Button {
+                        exportVocabulary()
+                    } label: {
+                        Label("导出词汇 CSV…", systemImage: "tablecells")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    Spacer()
+                }
+                Text("备份生成完整的 .sqlite 快照，可直接替换数据目录里的 db.sqlite 还原。"
+                     + "词汇 CSV 含词形/释义/掌握度，可再导入回来。")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
         }
     }
@@ -159,6 +193,41 @@ struct StorageSettingsView: View {
     }
 
     private var dbURL: URL { dataDirectory.appendingPathComponent("db.sqlite") }
+
+    // MARK: - 备份 / 导出
+
+    /// 选择保存位置后备份数据库。
+    private func backupDatabase() {
+        let panel = NSSavePanel()
+        panel.title = "备份数据库"
+        panel.nameFieldStringValue = DataExporter.defaultBackupFileName()
+        panel.allowedContentTypes = [.database]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let bytes = try DataExporter.backupDatabase(world: world, to: url)
+            statusMessage = "已备份到 \(url.lastPathComponent)（\(sizeText(bytes))）"
+        } catch {
+            statusMessage = "备份失败：\(error)"
+        }
+    }
+
+    /// 选择保存位置后导出词汇 CSV。
+    private func exportVocabulary() {
+        let panel = NSSavePanel()
+        panel.title = "导出词汇 CSV"
+        panel.nameFieldStringValue = DataExporter.defaultVocabularyFileName()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let csv = try DataExporter.exportVocabularyCSV(world: world)
+            try csv.write(to: url, atomically: true, encoding: .utf8)
+            statusMessage = "已导出词汇到 \(url.lastPathComponent)"
+        } catch {
+            statusMessage = "导出失败：\(error)"
+        }
+    }
 
     private func fileSize(_ url: URL) -> Int64? {
         let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])

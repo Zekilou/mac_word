@@ -16,9 +16,21 @@ final class HomeViewModel {
     var profile: VocabularyProfile?
     var cefr: CEFRProgress?
     var errorMessage: String?
+    /// 词库数量（首次运行判定用）。
+    var deckCount = 0
+    /// 全局词汇概览（首次运行判定用）。
+    var overview: GraphQueries.MasteryOverview?
 
     init(world: World) {
         self.world = world
+    }
+
+    /// 是否「全新安装」：既没有词库，也没有任何词汇记录。
+    /// @ai: 首次启动时首页原本只是一排 0 的空 KPI，新用户不知道从哪开始。
+    ///      用「零词库 + 零词汇记录」判定，导入词库或做过词汇初始化后自动消失。
+    var isFirstRun: Bool {
+        guard deckCount == 0, let overview else { return false }
+        return overview.known + overview.unknown + overview.seen == 0
     }
 
     /// 今天的快照（无活动时也有，记录当前收盘状态）。
@@ -45,6 +57,8 @@ final class HomeViewModel {
             let counts = WordFrequency.bundled?.bandFamilyCounts ?? [:]
             profile = VocabularyProfileBuilder.build(bandStats: bandStats, bandFamilyCounts: counts)
             cefr = profile.map { CEFRMapper.progress(families: $0.estimatedKnownTotal) }
+            deckCount = (try? world.graph.allDecks().count) ?? 0
+            overview = try? world.graph.masteryOverview()
             errorMessage = nil
         } catch {
             errorMessage = "\(error)"
