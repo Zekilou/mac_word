@@ -117,41 +117,56 @@ extension GraphQueries {
     // MARK: - 5. 已记录词汇表（词表浏览）
 
     /// 已记录词元条目（有掌握度或出现过记录）。
+    /// 词汇表行：**完整词快照 + 词表专有的 `source`**。
+    ///
+    /// @ai: 与 `CardListItem` 同款收敛——内部只持有 `WordCore`，词频带 `band`/`rank`、
+    ///      代表卡的 `schedule` 都随快照一起过来，所以词汇表现在可以按词频带与到期筛。
+    ///      旧属性名全部保留为转发计算属性，UI 与测试无需改动。
     public struct RecordedLemma: Identifiable, Sendable, Equatable {
-        public var id: EntityID { lemmaID }
-        public let lemmaID: EntityID
-        /// 词面（text_a，可能带音标尾巴；显示时用 WordNormalizer.clean 清洗）。
-        public let text: String
-        /// 主释义（text_b，可空）。
-        public let definition: String?
-        /// 掌握度（0 = 仅 seen 记录）。
-        public let mastery: Double
-        /// 出现过次数。
-        public let seenCount: Int
-        /// 最近写入来源（init / rss 等）。
-        public let source: String?
-        public let updatedAt: Date?
-        /// BKT 后验掌握度概率；nil = 尚无事件（未建后验）。
-        public let belief: Double?
-        /// 上下文多样性：出现过的不同 region 数。
-        public let contextCount: Int
-        /// 词事件总数。
-        public let eventCount: Int
+        public var id: EntityID { word.lemmaId }
 
-        /// 统一词快照（供筛选 / 列表复用另一份字段定义）。
-        /// @ai: 这是 RecordedLemma → WordCore 的桥。RecordedLemma 没有词频带与卡片调度，
-        ///      那两项留空（band/rank/schedule = nil），筛选时对应 facet 不启用即可。
-        public var word: WordCore {
-            WordCore(
-                lemmaId: lemmaID,
-                text: text,
-                definition: definition,
-                mastery: mastery > 0 ? mastery : nil,
-                belief: belief,
-                seenCount: seenCount,
-                eventCount: eventCount,
-                contextCount: contextCount,
-                updatedAt: updatedAt)
+        /// 完整词快照（唯一数据来源）。
+        public let word: WordCore
+        /// 最近写入来源（init / rss 等）——词汇表专有，不在 WordCore 里。
+        public let source: String?
+
+        public init(word: WordCore, source: String?) {
+            self.word = word
+            self.source = source
+        }
+
+        // MARK: 转发到 word
+
+        public var lemmaID: EntityID { word.lemmaId }
+        public var text: String { word.text }
+        public var definition: String? { word.definition }
+        /// 掌握度：WordCore 用 nil 表示「无记录」，旧口径用 0，这里保持旧语义。
+        public var mastery: Double { word.mastery ?? 0 }
+        public var seenCount: Int { word.seenCount }
+        public var updatedAt: Date? { word.updatedAt }
+        public var belief: Double? { word.belief }
+        public var contextCount: Int { word.contextCount }
+        public var eventCount: Int { word.eventCount }
+        /// 词频带 1..25；nil = 表外。**本轮新增**（以前词汇表没有这一列）。
+        public var band: Int? { word.band }
+        /// 全表排名。**本轮新增**。
+        public var rank: Int? { word.rank }
+        /// 该词代表卡的排程（nil = 没有卡）。**本轮新增**。
+        public var schedule: WordCore.CardSchedule? { word.schedule }
+
+        /// 过渡构造器（测试与旧调用点用）。
+        /// @ai: 新代码应直接用 `RecordedLemma(word:source:)`，否则新增字段会在构造时丢掉。
+        public init(
+            lemmaID: EntityID, text: String, definition: String?, mastery: Double,
+            seenCount: Int, source: String?, updatedAt: Date?, belief: Double?,
+            contextCount: Int, eventCount: Int
+        ) {
+            self.init(word: WordCore(
+                lemmaId: lemmaID, text: text, definition: definition,
+                mastery: mastery > 0 ? mastery : nil, belief: belief,
+                seenCount: seenCount, eventCount: eventCount,
+                contextCount: contextCount, updatedAt: updatedAt),
+                source: source)
         }
     }
 
@@ -159,32 +174,19 @@ extension GraphQueries {
     /// @ai: 状态派生统一走 WordMarkState.from(belief:mastery:seenCount:)，保证与词块显示口径一致。
     public func recordedLemmas() throws -> [RecordedLemma] {
         try database.dbWriter.read { db in
+            // @ai: 复用 `wordCoreColumnsByLemma` / `wordCoreFromByLemma`（唯一词侧连接）——
+            //      以前这里手写 JOIN + 两个相关子查询，词频带与代表卡排程根本没查，
+            //      所以词汇表只能禁用 .band / .due 两个筛选维度。
+            //      额外多查一列 `k.source`（词汇表专有）。
             let rows = try Row.fetchAll(db, sql: """
-                SELECT k.entity_id, t.text_a AS text, t.text_b AS definition,
-                       k.mastery, k.seen_count, k.source, k.updated_at,
-                       b.belief AS belief,
-                       (SELECT COUNT(DISTINCT e.region_id) FROM comp_word_event e
-                        WHERE e.lemma_id = k.entity_id) AS context_count,
-                       (SELECT COUNT(*) FROM comp_word_event e
-                        WHERE e.lemma_id = k.entity_id) AS event_count
-                FROM comp_user_known k
-                LEFT JOIN comp_text t ON t.entity_id = k.entity_id
-                LEFT JOIN comp_mastery_belief b ON b.entity_id = k.entity_id
-                WHERE k.mastery > 0 OR k.seen_count > 0
-                ORDER BY k.updated_at DESC, k.entity_id DESC
+                SELECT \(Self.wordCoreColumnsByLemma),
+                       k.source AS source
+                \(Self.wordCoreFromByLemma)
+                  AND (k.mastery > 0 OR k.seen_count > 0)
+                ORDER BY k.updated_at DESC, n.id DESC
                 """)
             return rows.map { row in
-                RecordedLemma(
-                    lemmaID: row["entity_id"],
-                    text: TextSanitizer.clean(row["text"], preserveLineBreaks: false) ?? "",
-                    definition: TextSanitizer.clean(row["definition"], preserveLineBreaks: true),
-                    mastery: row["mastery"],
-                    seenCount: row["seen_count"],
-                    source: row["source"],
-                    updatedAt: row["updated_at"],
-                    belief: row["belief"],
-                    contextCount: row["context_count"] ?? 0,
-                    eventCount: row["event_count"] ?? 0)
+                RecordedLemma(word: Self.makeWordCore(row), source: row["source"])
             }
         }
     }

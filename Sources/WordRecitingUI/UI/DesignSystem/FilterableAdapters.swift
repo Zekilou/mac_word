@@ -55,21 +55,14 @@ extension LemmaCandidate: WordCoreBacked, FilterableWord {
     var filterID: String { lemmaId }
 }
 
-// MARK: - 旧 DTO（过渡期）
-
-/// `CardListItem` 是「卡片浏览」尚未迁到 `WordCore.Card` 时仍在用的旧 DTO。
-/// @ai: 它没有 `word: WordCore`，所以只能直接实现筛选属性——这是本项目里
-///      **唯一**一份手写的 FilterableWord 实现（其余全部走 WordCoreBacked 自动派生）。
-///      卡片浏览迁移到 `WordCore.Card` 之后这个 extension 应当删除。
-extension CardListItem: FilterableWord {
+/// 卡片行：内部持有 `WordCore`，所以筛选属性与词列表**完全同源**。
+///
+/// @ai: 这个 extension 以前是手写的（因为 `CardListItem` 只平铺了 10 个字段，
+///      没有 `WordCore`，词频带等维度只能留空）。现在 `CardListItem` 已收敛到
+///      `WordCore`，于是只剩「身份用 cardId」这一处差异。
+///      至此**全工程只有一份** FilterableWord 实现（`WordCoreBacked` 的默认实现）。
+extension CardListItem: WordCoreBacked, FilterableWord {
     var filterID: String { cardId }
+    // 词面用纯词形（与行内展示一致；WordCore.text 可能带音标尾巴）
     var wordText: String { plainText }
-    var wordDefinition: String? { definition }
-    var wordMark: WordMarkState {
-        WordMarkState.from(belief: belief, mastery: mastery, seenCount: seenCount)
-    }
-    var wordBelief: Double? { belief }
-    var wordSeenCount: Int { seenCount }
-    var wordDueAt: Date? { dueAt }
-    var wordReps: Int { reps ?? 0 }
 }

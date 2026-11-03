@@ -237,7 +237,6 @@ final class WordCoreTests: XCTestCase {
     ///      （见 docs/handoff/2026-11-03-word-core-consolidation.md）。
     ///      实现后把下面这行 skip 删掉，测试会开始真正校验。
     func testCardRowExposesEveryFilterableFacet() throws {
-        try XCTSkipIf(true, "CardListItem 尚未提供 band/rank/updatedAt；等 WordCore 收敛后启用")
         try makeDeck()
         try makeWord(lemmaId: "L1", cardId: "C1", text: "abandon",
                      definition: "give up", mastery: 2.0, belief: 0.95,
@@ -249,36 +248,43 @@ final class WordCoreTests: XCTestCase {
         let abandon = try XCTUnwrap(cards.first { $0.text == "abandon" })
         let zebra = try XCTUnwrap(cards.first { $0.text == "zebra" })
 
-        // @ai: CardListItem 目前只暴露 wordBand/wordSeenCount/wordDueAt（FilterableWord 层），
-        //      裸字段 band/rank/updatedAt 尚未加入——等 WordCore 收敛后再断言。
+        XCTAssertEqual(abandon.band, 1)
+        XCTAssertEqual(abandon.rank, 12)
+        XCTAssertNotNil(abandon.updatedAt)
         XCTAssertEqual(abandon.wordBand, 1)
         XCTAssertEqual(abandon.wordSeenCount, 1)
         XCTAssertNotNil(abandon.wordDueAt)
+        XCTAssertEqual(zebra.band, 20)
 
-        // 按到期筛选生效（这张卡已到期）
+        // 按词频带筛选在卡片行上生效（本轮收敛前这里只能 skip）
         var filter = ListFilter()
+        filter.bands = [.top1k]
+        XCTAssertEqual(filter.apply(cards, facets: [.band, .text]).map(\.text), ["abandon"])
+
+        // 按到期筛选同样生效：makeWord 默认写 dueAt = now，所以两张卡都已到期。
+        filter = ListFilter()
         filter.dues = [.overdue]
         XCTAssertEqual(filter.apply(cards, facets: [.due]).count, 2)
-        _ = zebra
-        _ = filter
     }
 
     /// 词汇表（按词行）同样能按词频带 / 到期筛。
     /// @ai: **待后端实现**——`RecordedLemma` 目前无 band / schedule。
     func testRecordedLemmaRowExposesBandAndSchedule() throws {
-        try XCTSkipIf(true, "RecordedLemma 尚未提供 band/schedule；等 WordCore 收敛后启用")
         try makeDeck()
         try makeWord(lemmaId: "L1", cardId: "C1", text: "abandon",
                      definition: "give up", mastery: 2.0, band: 1)
         try makeWord(lemmaId: "L2", cardId: "C2", text: "zebra",
                      definition: "斑马", mastery: 1.0, band: 20)
 
-        // @ai: RecordedLemma 目前没有 band / schedule 裸字段（只有 FilterableWord 层的派生）。
-        //      这里只验证「按词行取得到数据」，词频/排程筛选等 WordCore 收敛后补断言。
         let entries = try graph.recordedLemmas()
-        XCTAssertEqual(entries.count, 2)
+        var filter = ListFilter()
+        filter.bands = [.top25k]
+        XCTAssertEqual(filter.apply(entries, facets: [.band]).map(\.text), ["zebra"])
+
         let abandon = try XCTUnwrap(entries.first { $0.text == "abandon" })
-        XCTAssertEqual(abandon.mastery, 2.0)
+        XCTAssertEqual(abandon.band, 1)
+        XCTAssertEqual(abandon.schedule?.cardId, "C1")
+        XCTAssertNotNil(abandon.schedule?.dueAt)
     }
 
     // MARK: - 5. 单行读取

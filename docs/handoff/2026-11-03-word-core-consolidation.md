@@ -5,29 +5,39 @@
 
 ---
 
-## ⚠️ 进度更新（2026-11-03 晚）
+## ✅ 进度：已完成（2026-11-03 晚）
 
-**另一个会话已完成第一轮**，`WordCore` 已落地（`Sources/WordRecitingCore/ECS/WordCore.swift`
-+ `GraphQueries+WordCore.swift`），`GraphQueries+Features.swift` 已重写，
-`dueCards` / `cardsInDeck` 已改为复用新的连接逻辑。
+**两个会话合计完成**：
 
-**UI 侧适配层已简化**：`FilterableAdapters.swift` 现在只剩一个协议 `WordCoreBacked`
-（要求一个 `word: WordCore` 属性）+ 一份共享实现，派生 DTO 只声明 `filterID`。
+第一轮（后端会话）：`WordCore` + `WordCore.Card` 落地，`GraphQueries+WordCore.swift`
+写出唯一的连接与映射（`wordCoreJoin` / `wordCoreColumns()` / `wordCoreFromByLemma` /
+`wordCoreFromByCard` / `makeWordCore` / `makeWordCard`）。
 
-### 仍然缺的（这才是接下来要做的）
+第二轮（UI 会话）把 4 个 DTO 真正接过去：
 
-| 类型 | 缺什么 | 影响 |
-|---|---|---|
-| `CardListItem` | `band` / `rank` / `updatedAt` 裸字段 | 卡片浏览页无法启用 `.band` 筛选 |
-| `RecordedLemma` | `band` / `schedule` 裸字段 | 词汇表无法启用 `.band` / `.due` 筛选 |
-| `WordFeatures` | `text` / `definition` / `mastery` | 它仍只是「调度特征」，不是完整词快照 |
-| `LemmaDetail` | `belief` / `band` | 详情面板无法展示概率与词频 |
+| 类型 | 改动 |
+|---|---|
+| `CardListItem` | 内部只持有 `word: WordCore`，旧属性名全部保留为转发计算属性 |
+| `RecordedLemma` | 同上，额外保留词表专有的 `source` |
+| `cardsInDeck` | 改用 `wordCoreColumnsByCard` + `wordCoreFromByCard`（用 `EXISTS` 加词库过滤） |
+| `dueCards` | 同上，追加到期队列谓词。**不能**用 `dueQueueFrom`——它是 lt/ct/uk/mb 别名，与共享列清单的 t/k/b/f/ev 不兼容 |
+| `recordedLemmas` | 改用 `wordCoreColumnsByLemma` + `wordCoreFromByLemma`，多查一列 `k.source` |
+| `FilterableAdapters` | **删掉了唯一一份手写 FilterableWord 实现**，全工程只剩 `WordCoreBacked` 的默认实现 |
 
-**对应测试已写好但被 skip**（`Tests/.../ECS/WordCoreTests.swift`）：
-- `testCardRowExposesEveryFilterableFacet`
-- `testRecordedLemmaRowExposesBandAndSchedule`
+### 结果
 
-实现上面几项后，把这两处的 `XCTSkipIf(true, ...)` 删掉，测试会开始真正校验。
+- 卡片浏览 / 词汇表现在都能按 **词频带（band）** 与 **到期（due）** 筛选
+- `CardListItem` 有了 `band` / `rank` / `updatedAt`；`RecordedLemma` 有了 `band` / `rank` / `schedule`
+- 两个原本 `XCTSkipIf(true, ...)` 的测试（`testCardRowExposesEveryFilterableFacet`、
+  `testRecordedLemmaRowExposesBandAndSchedule`）已删掉 skip，**真正在跑**
+- 测试 skipped 从 12 降到 10（那 10 个是原基线的 sidecar/环境依赖）
+
+### 仍未收敛的（可选，不影响功能）
+
+- `WordFeatures` 仍是独立的调度特征类型（不含 `text`/`definition`）。它服务的是
+  打分策略，不需要词面，**保持独立是合理的**，不必强行合并。
+- `LemmaDetail` 不含 `belief`/`band`。详情面板目前不展示概率与词频；
+  要展示的话加两个字段即可（`wordCore(lemmaId:)` 已经能取到）。
 
 ---
 

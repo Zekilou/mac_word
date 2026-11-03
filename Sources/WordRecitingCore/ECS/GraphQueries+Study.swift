@@ -62,23 +62,19 @@ extension GraphQueries {
     /// CSV `front,back` 导入的卡片没有 instantiates 边 → UI 报「今日到期 N」但队列为空）。
     public func dueCards(limit: Int = 100, now: Date = Date()) throws -> [CardListItem] {
         try database.dbWriter.read { db in
+            // @ai: 复用 `wordCoreFromByCard` 的行锚点与列清单（唯一定义），
+            //      只追加到期队列的谓词。这样队列里的卡片同样带 band / rank / schedule，
+            //      背诵页与卡片浏览页的筛选口径一致。
+            //      注意：**不能**改用 `dueQueueFrom`——它用的是 lt/ct/uk/mb 别名，
+            //      与共享列清单的 t/k/b/f/ev 别名不兼容。
+            //      `dueCount` / `queueDueDates` 仍走 `dueQueueFrom`，两者行集一致（都是 LEFT JOIN）。
             let sql = """
-            SELECT
-                c.id            AS card_id,
-                COALESCE(inst_edge.dst_id, c.id) AS lemma_id,
-                COALESCE(lt.text_a, ct.text_a)   AS text,
-                COALESCE(lt.text_b, ct.text_b)   AS definition,
-                ss.due_at       AS due_at,
-                ss.interval_days AS interval_days,
-                ss.reps         AS reps,
-                uk.mastery      AS mastery,
-                uk.seen_count   AS seen_count,
-                mb.belief       AS belief
-            \(Self.dueQueueFrom)
+            SELECT \(Self.wordCoreColumnsByCard)
+            \(Self.wordCoreFromByCard)
               AND (ss.due_at IS NULL OR ss.due_at <= ?)
-              AND (uk.mastery IS NULL OR uk.mastery < ?)
-              AND (mb.belief IS NULL OR mb.belief < ?)
-              AND COALESCE(lt.text_a, ct.text_a) IS NOT NULL
+              AND (k.mastery IS NULL OR k.mastery < ?)
+              AND (b.belief IS NULL OR b.belief < ?)
+              AND COALESCE(t.text_a, ct.text_a) IS NOT NULL
             -- 到期时间升序；同一时间用 card_id 兜底，保证队列顺序可复现（否则同 key 行序未定义）
             ORDER BY COALESCE(ss.due_at, '1970-01-01') ASC, c.id ASC
             LIMIT ?
@@ -87,17 +83,7 @@ extension GraphQueries {
                 db, sql: sql,
                 arguments: [now, Self.dueMasteryCutoff, Self.dueBeliefCutoff, limit])
             return rows.map { row in
-                CardListItem(
-                    cardId: row["card_id"],
-                    lemmaId: row["lemma_id"],
-                    text: TextSanitizer.clean(row["text"], preserveLineBreaks: false) ?? "",
-                    definition: TextSanitizer.clean(row["definition"], preserveLineBreaks: true),
-                    dueAt: row["due_at"],
-                    intervalDays: row["interval_days"],
-                    reps: row["reps"],
-                    mastery: row["mastery"],
-                    seenCount: row["seen_count"] ?? 0,
-                    belief: row["belief"])
+                CardListItem(cardId: row["card_id"], word: Self.makeWordCore(row))
             }
         }
     }

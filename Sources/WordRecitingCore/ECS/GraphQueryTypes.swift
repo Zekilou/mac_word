@@ -75,53 +75,72 @@ public struct LemmaCandidate: Sendable, Equatable, Identifiable {
     }
 }
 
-/// Deck 内一张卡片（Card 节点）的词面视图：单词 + 释义 + 复习状态 + 全局掌握度。
-/// @ai: mastery/seenCount 来自全局唯一数据源 comp_user_known（挂 Lemma），与词汇 Tab 同口径——
-///      词包展示必须带上，保证"一个词一份掌握度"在卡片侧可见。
+/// Deck 内一张卡片（Card 节点）的视图：**卡片身份 + 完整词快照**。
+///
+/// @ai: 本轮收敛的关键——它现在内部**只持有 `WordCore`**，不再自己平铺 10 个字段。
+///      以前它的字段是 `CardListItem` 私有的一份，导致：
+///        · 词频带 `band`、`rank`、`updatedAt` 在卡片侧根本不存在 → 卡片浏览页无法按词频筛
+///        · 同一个词在不同列表里的口径要各维护一次
+///      现在 `band`/`rank`/`updatedAt`/`schedule` 全部随 `WordCore` 一起过来，
+///      卡片浏览页的筛选维度与词列表完全一致。
+///
+///      兼容性：保留了全部旧属性名作为转发计算属性，所以现有 UI 与测试无需改动。
 public struct CardListItem: Sendable, Equatable, Identifiable {
     public var id: EntityID { cardId }
-    public let cardId: EntityID
-    public let lemmaId: EntityID
-    /// 干净单词（text_a，可能带音标尾巴，见 plainText）
-    public let text: String
-    /// 释义（text_b）
-    public let definition: String?
-    /// 复习状态（可空：未排程）
-    public let dueAt: Date?
-    public let intervalDays: Double?
-    public let reps: Int?
-    /// 全局掌握度（comp_user_known.mastery：0=无记录 / 1=不会 / 2=会 / 1~2 渐变；nil=从未标记）
-    public let mastery: Double?
-    /// 出现过次数（seen_count，RSS 等自动累计）
-    public let seenCount: Int
-    /// BKT 后验掌握度概率；nil = 尚无事件。
-    public var belief: Double? = nil
 
-    public init(cardId: EntityID, lemmaId: EntityID, text: String, definition: String?,
-                dueAt: Date?, intervalDays: Double?, reps: Int?, mastery: Double?,
-                seenCount: Int, belief: Double? = nil) {
+    public let cardId: EntityID
+    /// 完整词快照（唯一数据来源）。
+    public let word: WordCore
+
+    public init(cardId: EntityID, word: WordCore) {
         self.cardId = cardId
-        self.lemmaId = lemmaId
-        self.text = text
-        self.definition = definition
-        self.dueAt = dueAt
-        self.intervalDays = intervalDays
-        self.reps = reps
-        self.mastery = mastery
-        self.seenCount = seenCount
-        self.belief = belief
+        self.word = word
     }
+
+    // MARK: 转发到 word（保持旧签名可用）
+
+    public var lemmaId: EntityID { word.lemmaId }
+    /// 干净单词（text_a，可能带音标尾巴，见 plainText）
+    public var text: String { word.text }
+    /// 释义（text_b）
+    public var definition: String? { word.definition }
+    /// 复习状态（可空：未排程）
+    public var dueAt: Date? { word.schedule?.dueAt }
+    public var intervalDays: Double? { word.schedule?.intervalDays }
+    public var reps: Int? { word.schedule?.reps }
+    /// 全局掌握度（comp_user_known.mastery）
+    public var mastery: Double? { word.mastery }
+    /// 出现过次数（seen_count，RSS 等自动累计）
+    public var seenCount: Int { word.seenCount }
+    /// BKT 后验掌握度概率；nil = 尚无事件。
+    public var belief: Double? { word.belief }
+    /// 词频带 1..25；nil = 表外。
+    public var band: Int? { word.band }
+    /// 全表排名。
+    public var rank: Int? { word.rank }
+    /// 掌握度记录更新时间。
+    public var updatedAt: Date? { word.updatedAt }
 }
 
 extension CardListItem {
-    /// 纯单词形式：剥离 "[音标]" / "(词性)" 尾巴，用于 UI 展示与匹配。
-    public var plainText: String {
-        var end = text.startIndex
-        while end < text.endIndex, text[end].isLetter || text[end] == "-" || text[end] == "'" {
-            text.formIndex(after: &end)
-        }
-        return String(text[..<end]).trimmingCharacters(in: .whitespaces)
+    /// 便捷构造（测试与旧调用点用）：把扁平字段包成 `WordCore`。
+    /// @ai: 这是**过渡构造器**。新代码应直接用 `CardListItem(cardId:word:)`，
+    ///      这样词频带等新字段才不会在构造时丢掉。
+    public init(cardId: EntityID, lemmaId: EntityID, text: String, definition: String?,
+                dueAt: Date?, intervalDays: Double?, reps: Int?, mastery: Double?,
+                seenCount: Int, belief: Double? = nil) {
+        self.init(cardId: cardId, word: WordCore(
+            lemmaId: lemmaId, text: text, definition: definition,
+            mastery: mastery, belief: belief, seenCount: seenCount,
+            schedule: dueAt != nil || reps != nil
+                ? WordCore.CardSchedule(
+                    cardId: cardId, dueAt: dueAt, intervalDays: intervalDays,
+                    reps: reps ?? 0, lapses: 0, lastReviewedAt: nil)
+                : nil))
     }
+
+    /// 纯单词形式：剥离 "[音标]" / "(词性)" 尾巴，用于 UI 展示与匹配。
+    public var plainText: String { word.plainText }
 }
 
 /// Lemma 详情（卡片浏览器右侧详情面板用）。
