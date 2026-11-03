@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 最小可用的打分策略：按固定表打分，用于验证 WordSelector 的取词逻辑。
 private struct StubScoring: WordScoringStrategy {
@@ -32,8 +33,7 @@ final class SchedulingStrategyTests: XCTestCase {
 
     private func features(_ ids: [EntityID]) -> [WordFeatures] {
         ids.map { id in
-            WordFeatures(lemmaId: id, belief: nil, band: nil, rank: nil,
-                         eventCount: 0, contextCount: 0, lastEventAt: nil, card: nil)
+            WordFeatures(lemmaId: id)
         }
     }
 

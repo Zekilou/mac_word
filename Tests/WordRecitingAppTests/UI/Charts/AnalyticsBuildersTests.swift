@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 二期：记忆质量 / 学习行为的纯整形层。
 final class AnalyticsBuildersTests: XCTestCase {

@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// Agentic 提示词模板与宽容解析。
 final class AgenticPromptsTests: XCTestCase {

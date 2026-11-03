@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 @MainActor
 final class AnalyticsViewModelTests: XCTestCase {

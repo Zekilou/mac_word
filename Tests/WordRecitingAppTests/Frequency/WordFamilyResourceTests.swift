@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 真实内置词频表校验：资源必须存在、可用、带序单调。
 final class WordFamilyResourceTests: XCTestCase {

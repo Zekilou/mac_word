@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 真实端到端冒烟测试：
 /// 1. 导入 external_src/TOEFL 400 .apkg 文件

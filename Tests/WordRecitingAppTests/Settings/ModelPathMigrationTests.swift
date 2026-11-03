@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 1.0.0 改名（WordRecitingApp → wordincontxt）后，UserDefaults 里持久化的绝对路径迁移。
 /// 背景：目录被 mv 到新名，但 settings.localModelPath / llamaServerBinaryPath 仍是旧前缀，

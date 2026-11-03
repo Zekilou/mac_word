@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// World.run 对空 requiresAll 的短路：不依赖 entity 集合的 System 不应做全表 id 扫描。
 final class WorldRunTests: XCTestCase {

@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// OpenAICompatibleClient 思考型模型适配测试：
 /// thinking 参数 / 流式跳 reasoning_content / thinkingOnly / 探测 / 静默超时。

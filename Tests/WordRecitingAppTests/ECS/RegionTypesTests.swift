@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 阶段一：region / 词事件 / 词频坐标的合同枚举。
 final class RegionTypesTests: XCTestCase {

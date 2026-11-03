@@ -1,5 +1,7 @@
 import AppKit
 import SwiftUI
+import WordRecitingCore
+import WordRecitingUI
 
 let app = NSApplication.shared
 let delegate = AppDelegate()

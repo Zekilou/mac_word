@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 一期-2：图表数据整形（纯函数层，可单测）。
 final class AnalyticsChartDataTests: XCTestCase {

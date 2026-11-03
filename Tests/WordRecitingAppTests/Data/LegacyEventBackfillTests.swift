@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// v6 一次性迁移：把 v4 之前产生的词汇记录（comp_user_known 的 mastery / seen_count）
 /// 合成为词事件流，让 BKT 后验对历史数据也有值。

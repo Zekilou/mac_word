@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 背诵复习闭环测试：StudySystem（SM-2 调度）+ 复习查询（dueCards/studyStats/cardForLemma/weakLemmaDetails）。
 /// @ai: 写入走 World.run(StudySystem)；查询走 GraphQueries 命名方法。
@@ -210,9 +211,26 @@ final class StudySystemTests: XCTestCase {
         XCTAssertFalse(vm.queue.isEmpty)
         XCTAssertEqual(vm.queue.first?.cardId, "card-2")   // 新卡优先
         let before = vm.stats?.totalReviews ?? 0
+        // @ai: 评分前置条件是「已翻到背面」，正面盲评不再生效（旧行为是直接跳卡）。
+        vm.flip()
         vm.rate(.good)
         XCTAssertEqual(vm.remaining, vm.queue.count - 1)
         XCTAssertEqual((vm.stats?.totalReviews ?? 0), before + 1)
+    }
+
+    /// 正面（未翻面）按评分键必须无效——「误触跳过整张卡」的回归测试。
+    @MainActor func testStudyViewModelIgnoresRatingOnFrontSide() throws {
+        try seedDeck()
+        let vm = StudyViewModel(world: world)
+        vm.reload()
+        let before = vm.stats?.totalReviews ?? 0
+
+        XCTAssertTrue(vm.isFront)
+        XCTAssertFalse(vm.canRate)
+        vm.rate(.again)
+
+        XCTAssertEqual(vm.remaining, vm.queue.count)          // 队列一张没少
+        XCTAssertEqual(vm.stats?.totalReviews ?? 0, before)   // 库没被写
     }
 
     @MainActor func testGenerateViewModelReadingMarkDrivesSchedule() throws {

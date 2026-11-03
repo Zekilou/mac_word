@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// Task 5：AgentSidecarModelSpec 序列化契约（与 sidecar.py / generator.py 的 params.model 对齐）。
 final class AgentSidecarModelSpecTests: XCTestCase {

@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 final class LemmaFrequencySystemTests: XCTestCase {
     private var appDB: AppDatabase!

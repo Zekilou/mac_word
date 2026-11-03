@@ -1,12 +1,14 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 final class FrequencyAwareIntervalPolicyTests: XCTestCase {
     private let policy = FrequencyAwareIntervalPolicy()
 
     private func features(belief: Double? = nil, band: Int? = nil) -> WordFeatures {
-        WordFeatures(lemmaId: "L1", belief: belief, band: band, rank: nil,
-                     eventCount: 0, contextCount: 0, lastEventAt: nil, card: nil)
+        WordFeatures(
+            lemmaId: "L1", belief: belief, band: band, rank: nil,
+            eventCount: 0, contextCount: 0, lastEventAt: nil, card: nil)
     }
 
     private var baseState: ScheduleStateComponent {

@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 生成输出 token 动态化 + 上下文压缩测试：
 /// bodyMaxTokens 随目标字数联动（不再硬编码 600）；ContextCompressor 超窗 head-tail 截断。

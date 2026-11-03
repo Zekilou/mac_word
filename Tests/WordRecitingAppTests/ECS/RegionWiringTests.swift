@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 @MainActor
 final class RegionWiringTests: XCTestCase {
@@ -31,9 +32,8 @@ final class RegionWiringTests: XCTestCase {
         try world.registry.insertNode(id: "C1", kind: .card, createdAt: Date())
 
         let vm = StudyViewModel(world: world)
-        vm.queue = [CardListItem(
-            cardId: "C1", lemmaId: "L1", text: "abandon", definition: nil,
-            dueAt: nil, intervalDays: nil, reps: nil, mastery: nil, seenCount: 0)]
+        vm.queue = [CardListItem(cardId: "C1", lemmaId: "L1", text: "abandon", definition: nil, dueAt: nil, intervalDays: nil, reps: nil, mastery: nil, seenCount: 0)]
+        vm.flip()          // 评分前置条件：必须先翻到背面
         vm.rate(.good)
 
         XCTAssertEqual(try count(
@@ -47,9 +47,8 @@ final class RegionWiringTests: XCTestCase {
         try world.registry.insertNode(id: "C1", kind: .card, createdAt: Date())
 
         let vm = StudyViewModel(world: world)
-        vm.queue = [CardListItem(
-            cardId: "C1", lemmaId: "L1", text: "abandon", definition: nil,
-            dueAt: nil, intervalDays: nil, reps: nil, mastery: nil, seenCount: 0)]
+        vm.queue = [CardListItem(cardId: "C1", lemmaId: "L1", text: "abandon", definition: nil, dueAt: nil, intervalDays: nil, reps: nil, mastery: nil, seenCount: 0)]
+        vm.flip()          // 评分前置条件：必须先翻到背面
         vm.rate(.again)
 
         XCTAssertEqual(try count(

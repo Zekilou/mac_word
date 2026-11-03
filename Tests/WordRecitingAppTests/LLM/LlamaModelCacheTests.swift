@@ -1,6 +1,7 @@
 import XCTest
 import LlamaSwift
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// LlamaModelCache 测试：模型常驻复用（避免每次生成反复加载 GGUF）。
 /// 需要模型目录存在 .gguf；无模型则跳过（不视为失败）。

@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 final class AnkiImporterTests: XCTestCase {
     private let toeflPath = "/Users/zekiwithcat/Documents/Obsidian Vault/word_reciting/external_src/400_must_have_words_for_the_TOEFL_.apkg"

@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 造文（主路径）与卡片浏览查询测试：
 /// 1. RuleBasedGenerator .generate：给定主题 + 目标词 → 输出包含全部目标词的文章 + spans
@@ -68,7 +69,8 @@ final class GenerateAndCardBrowserTests: XCTestCase {
         let scheduleStates = [
             ScheduleStateComponent(
                 entityId: "card-1", stability: 1, difficulty: 5, dueAt: Date(),
-                intervalDays: 1, reps: 1, lapses: 0, lastRating: 3, lastReviewedAt: nil),
+                intervalDays: 1, reps: 1, lapses: 0, lastRating: 3, lastReviewedAt: nil,
+                schedulerId: "sm-2", queue: "review", customDataJson: nil),
         ]
 
         let batch = ImportBatch(

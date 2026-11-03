@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 造文文章全词状态测试：词块 token 化 / 目标词 span 匹配 / 状态判定 / 点击切换落库。
 final class GenerateArticleWordsTests: XCTestCase {

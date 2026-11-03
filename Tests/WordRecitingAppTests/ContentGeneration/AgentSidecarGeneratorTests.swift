@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// AgentSidecarGenerator 集成测试：真实 sidecar（ScriptedModel 假模型）+ 种子 World。
 /// @ai: sidecar 运行环境缺失时 XCTSkip（同 AgentSidecarClientTests）；回退路径用 StubGenerator 验证。

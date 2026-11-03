@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 阶段一：region / 词事件 / 词频组件的 round-trip 与注册表登记。
 final class RegionComponentsTests: XCTestCase {

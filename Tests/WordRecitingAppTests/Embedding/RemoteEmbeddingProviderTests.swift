@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// RemoteEmbeddingProvider（OpenAI 兼容 /embeddings 端点）测试。
 /// @ai: 全部 mock——StubURLProtocol 拦截网络，不触真实服务。

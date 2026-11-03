@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 三期：能力画像（CEFR 映射）与负载预测（到期分布）。
 final class AbilityAndForecastTests: XCTestCase {

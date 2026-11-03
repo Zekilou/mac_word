@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// KeychainSecretStore 真实读写测试（用独立 service，不碰生产数据）。
 /// @ai: 验证生产机密存储确实落到系统 Keychain 且可跨实例读取。

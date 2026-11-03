@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 阶段一：v4 迁移建表 / 索引 / 级联。
 final class RegionSchemaTests: XCTestCase {

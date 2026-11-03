@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// Agent sidecar 进程集成测试：spawn 真实 sidecar.py（venv python）握手。
 /// @ai: sidecar.py / venv python 缺失时 XCTSkip（开发环境必有，CI 无 Python 不失败）。

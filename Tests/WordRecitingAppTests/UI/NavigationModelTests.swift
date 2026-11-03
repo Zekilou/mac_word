@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 一期-3：导航合同（首页是一级选项、且没有二级子区）。
 final class NavigationModelTests: XCTestCase {

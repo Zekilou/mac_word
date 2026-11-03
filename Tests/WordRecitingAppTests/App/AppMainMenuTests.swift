@@ -1,6 +1,7 @@
 import XCTest
 import AppKit
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 主菜单构建测试（回归）。
 /// @ai: 纯 AppKit 壳不设 `NSApp.mainMenu` 时，AppKit 只建一个空应用菜单，

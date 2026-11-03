@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 阶段二：BKT 后验概率的存储层。
 final class MasteryBeliefSchemaTests: XCTestCase {

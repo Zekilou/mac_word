@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// ModelStore（模型文件发现 / 导入 / Ollama manifest 解析）测试。
 /// @ai: 全部使用临时目录，不碰真实用户目录。

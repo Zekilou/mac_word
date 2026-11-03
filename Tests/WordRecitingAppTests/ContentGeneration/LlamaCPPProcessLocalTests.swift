@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 进程内引擎真实推理测试（llama.cpp / LlamaSwift）。
 /// 需要模型目录（~/Library/Application Support/WordRecitingApp/models）存在 .gguf 文件，

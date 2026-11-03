@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// DeckCleanupSystem：删除词库（deck + 卡片），但**保留**全局词汇认知。
 /// @ai: 核心约束——「状态与卡片彻底分离」。删词库不等于忘词：

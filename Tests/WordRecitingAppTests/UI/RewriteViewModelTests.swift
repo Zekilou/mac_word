@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// RewriteViewModel 逻辑测试：parseTargets 解析 + runRewrite 改写落库 + 历史回看。
 /// @ai: 不依赖 SwiftUI，只测 ViewModel 纯逻辑与 World 协作。

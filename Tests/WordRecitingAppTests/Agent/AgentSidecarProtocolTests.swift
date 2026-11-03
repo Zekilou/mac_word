@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// Agent sidecar JSONL 协议解析测试。
 /// @ai: 契约与 external_src/agent_sidecar/sidecar.py 对齐；新增事件两侧同步后在此补用例。

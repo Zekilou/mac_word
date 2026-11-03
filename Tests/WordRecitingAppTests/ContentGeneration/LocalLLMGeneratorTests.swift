@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// LocalLLMGenerator 测试：mock LLMClient 验证 prompt 构造、文章清洗、span 扫描。
 final class LocalLLMGeneratorTests: XCTestCase {

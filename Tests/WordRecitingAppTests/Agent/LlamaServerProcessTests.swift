@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// LlamaServerProcess 端口解析测试（纯函数，不 spawn 真实进程）。
 /// @ai: parsePort 是 static 纯函数，覆盖 llama-server 各种输出格式。

@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 系统词典：HTML 清洗（parseEntry 纯函数）+ ViewModel（注入查询闭包 + 标记会不会落库）。
 final class SystemDictionaryTests: XCTestCase {

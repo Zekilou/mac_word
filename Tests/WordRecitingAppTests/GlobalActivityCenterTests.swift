@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// GlobalActivityCenter（进程守护）注册表与托管执行测试。
 @MainActor

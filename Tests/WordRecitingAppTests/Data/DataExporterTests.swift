@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// DataExporter：数据库备份 + 词汇 CSV 导出。
 /// @ai: 用户数据只有一个 sqlite 文件，此前无任何导出入口——本测试守护「备份可用、

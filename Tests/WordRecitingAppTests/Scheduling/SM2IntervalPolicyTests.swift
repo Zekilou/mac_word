@@ -1,12 +1,12 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 final class SM2IntervalPolicyTests: XCTestCase {
     private let policy = SM2IntervalPolicy()
 
     private func features() -> WordFeatures {
-        WordFeatures(lemmaId: "L1", belief: nil, band: nil, rank: nil,
-                     eventCount: 0, contextCount: 0, lastEventAt: nil, card: nil)
+        WordFeatures(lemmaId: "L1")
     }
 
     private func state(reps: Int?, difficulty: Double?,

@@ -1,11 +1,11 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 final class ScoringStrategiesTests: XCTestCase {
 
     private func features(_ id: EntityID, belief: Double? = nil, band: Int? = nil) -> WordFeatures {
-        WordFeatures(lemmaId: id, belief: belief, band: band, rank: nil,
-                     eventCount: 0, contextCount: 0, lastEventAt: nil, card: nil)
+        WordFeatures(lemmaId: id, belief: belief, band: band)
     }
 
     private func context(bandWindow: ClosedRange<Int>? = nil) -> ScoringContext {

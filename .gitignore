@@ -29,4 +29,10 @@ _archive/
 external_src/
 
 # 大型词向量二进制（本地生成，不提交）
+# @ai: 模块拆分后资源目录迁到 WordRecitingCore；旧路径保留兼容，
+#      新路径必须一起忽略，否则 6MB 二进制会被误提交。
 Sources/WordRecitingApp/Resources/glove50d.bin
+Sources/WordRecitingCore/Resources/glove50d.bin
+
+# 调参台（tools/*）的编译产物
+tools/*/.build/

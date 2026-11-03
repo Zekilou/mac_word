@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 @MainActor
 final class RandomPickStrategyTests: XCTestCase {
@@ -38,8 +39,9 @@ final class RandomPickStrategyTests: XCTestCase {
     }
 
     private func cardItem(_ cardId: String, _ lemmaId: String, _ text: String) -> CardListItem {
-        CardListItem(cardId: cardId, lemmaId: lemmaId, text: text, definition: nil,
-                     dueAt: nil, intervalDays: nil, reps: nil, mastery: nil, seenCount: 0)
+        CardListItem(
+            cardId: cardId, lemmaId: lemmaId, text: text, definition: nil,
+            dueAt: nil, intervalDays: nil, reps: nil, mastery: nil, seenCount: 0)
     }
 
     func testCriticalWordsPrefersEdgeOfKnowing() throws {

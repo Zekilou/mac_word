@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 @MainActor
 final class VocabularyListViewModelTests: XCTestCase {
@@ -43,14 +44,16 @@ final class VocabularyListViewModelTests: XCTestCase {
         try world.run(UserKnownSystem(), context: .markSeen(words: ["cold"], source: "rss"))
         vm.reload()
 
-        vm.filter = .known
-        XCTAssertEqual(vm.filtered.map(\.text), ["battle"])
-        vm.filter = .unknown
-        XCTAssertEqual(vm.filtered.map(\.text), ["abandon"])
-        vm.filter = .seen
-        XCTAssertEqual(vm.filtered.map(\.text), ["cold"])
-        vm.filter = .all
-        XCTAssertEqual(vm.filtered.count, 3)
+        // @ai: 状态筛选改由统一 ListFilter 承担（词汇表与其他词列表共用一份判定）。
+        let facets: Set<WordFacet> = [.mark, .sort]
+        vm.filter.marks = [.known]
+        XCTAssertEqual(vm.filter.apply(vm.entries, facets: facets).map(\.text), ["battle"])
+        vm.filter.marks = [.unknown]
+        XCTAssertEqual(vm.filter.apply(vm.entries, facets: facets).map(\.text), ["abandon"])
+        vm.filter.marks = [.seen]
+        XCTAssertEqual(vm.filter.apply(vm.entries, facets: facets).map(\.text), ["cold"])
+        vm.filter.marks = []
+        XCTAssertEqual(vm.filter.apply(vm.entries, facets: facets).count, 3)
     }
 
     func testSearchText() throws {
@@ -58,12 +61,13 @@ final class VocabularyListViewModelTests: XCTestCase {
         try world.run(UserKnownSystem(), context: .markKnown(lemmaId: "L1", source: "init"))
         vm.reload()
 
-        vm.searchText = "aban"
-        XCTAssertEqual(vm.filtered.count, 1)
-        vm.searchText = "放弃"
-        XCTAssertEqual(vm.filtered.count, 1)
-        vm.searchText = "zzz"
-        XCTAssertTrue(vm.filtered.isEmpty)
+        let facets: Set<WordFacet> = [.text, .definition, .sort]
+        vm.filter.query = "aban"
+        XCTAssertEqual(vm.filter.apply(vm.entries, facets: facets).count, 1)
+        vm.filter.query = "放弃"
+        XCTAssertEqual(vm.filter.apply(vm.entries, facets: facets).count, 1)
+        vm.filter.query = "zzz"
+        XCTAssertTrue(vm.filter.apply(vm.entries, facets: facets).isEmpty)
     }
 
     func testDisplayTextStripsPhoneticTail() throws {
@@ -86,13 +90,13 @@ final class VocabularyListViewModelTests: XCTestCase {
             words: ["alpha", "alpha", "gamma"], source: "rss"))
         vm.reload()
 
-        vm.sortOrder = .frequent
-        XCTAssertEqual(vm.filtered.first?.text, "alpha", "阅读频次最高排前")
-        XCTAssertEqual(vm.filtered.first?.seenCount, 2)
-        vm.sortOrder = .rare
-        XCTAssertEqual(vm.filtered.first?.seenCount, 1, "频次最低排前")
-        vm.sortOrder = .recent
-        XCTAssertEqual(vm.filtered.count, 3)
+        let facets: Set<WordFacet> = [.text, .sort]
+        vm.filter.sort = .seenDesc
+        XCTAssertEqual(vm.filter.apply(vm.entries, facets: facets).first?.text, "alpha",
+                       "阅读频次最高排前")
+        XCTAssertEqual(vm.filter.apply(vm.entries, facets: facets).first?.seenCount, 2)
+        vm.filter.sort = .recent
+        XCTAssertEqual(vm.filter.apply(vm.entries, facets: facets).count, 3)
     }
 
     func testBeliefTextFormatting() throws {
@@ -181,9 +185,10 @@ final class VocabularyListViewModelTests: XCTestCase {
         try seedEntry(lemmaId: "L3", text: "none", mastery: 2.0, belief: nil)
 
         let vm = VocabularyListViewModel(world: world)
-        vm.sortOrder = .mastery
+        vm.filter.sort = .masteryDesc
 
-        XCTAssertEqual(vm.filtered.map(\.lemmaID), ["L2", "L1", "L3"])
+        XCTAssertEqual(
+            vm.filter.apply(vm.entries, facets: [.sort]).map(\.lemmaID), ["L2", "L1", "L3"])
     }
 
     func testBeliefTextUsesPercentPresentation() throws {
@@ -199,19 +204,19 @@ final class VocabularyListViewModelTests: XCTestCase {
         try seedEntry(lemmaId: "L1", text: "abandon", mastery: 2.0, belief: 0.50)
 
         let vm = VocabularyListViewModel(world: world)
-        vm.filter = .learning
+        vm.filter.marks = [.learning]
 
-        XCTAssertEqual(vm.filtered.map(\.lemmaID), ["L1"])
+        XCTAssertEqual(vm.filter.apply(vm.entries, facets: [.mark]).map(\.lemmaID), ["L1"])
     }
 
     func testLearningIsExcludedFromKnownAndUnknownFilters() throws {
         try seedEntry(lemmaId: "L1", text: "abandon", mastery: 2.0, belief: 0.50)
 
         let vm = VocabularyListViewModel(world: world)
-        vm.filter = .known
-        XCTAssertTrue(vm.filtered.isEmpty)
+        vm.filter.marks = [.known]
+        XCTAssertTrue(vm.filter.apply(vm.entries, facets: [.mark]).isEmpty)
 
-        vm.filter = .unknown
-        XCTAssertTrue(vm.filtered.isEmpty)
+        vm.filter.marks = [.unknown]
+        XCTAssertTrue(vm.filter.apply(vm.entries, facets: [.mark]).isEmpty)
     }
 }

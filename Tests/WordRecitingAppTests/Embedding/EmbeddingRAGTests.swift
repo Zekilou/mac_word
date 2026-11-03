@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// Embedding RAG 选锚相关测试：GloVe 加载 / 余弦选锚 / 语义锚点合成 / 词库数据兜底。
 /// @ai: 全部 mock——注入手写小词表（test stub），不依赖真实 GloVe 文件（用户下载后由转换脚本生成）。

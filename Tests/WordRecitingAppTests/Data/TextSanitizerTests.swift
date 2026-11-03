@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 通用文本清洗测试：Anki 富文本（HTML/媒体标记/实体）→ 可读纯文本。
 /// @ai: GraphQueries 输出层统一调用 TextSanitizer.clean，本测试守护清洗正确性与旧数据兜底。

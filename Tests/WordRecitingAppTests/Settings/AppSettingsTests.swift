@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// AppSettings（UserDefaults 持久化）测试。
 /// @ai: 用独立 suite 避免污染 .standard；@MainActor（AppSettings 是 @MainActor）。

@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 输出约定标记的流式剥离：跨块识别、思考前置跳过、结束标记剥离、无标记回退全量。
 final class MarkedStreamBufferTests: XCTestCase {

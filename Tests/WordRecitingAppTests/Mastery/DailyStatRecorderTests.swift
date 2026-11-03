@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 一期：每日统计快照（趋势数据源）。
 /// 口径：与概率主口径一致（`WordMarkState` 阈值），单遍重放 `comp_word_event` 得到每天收盘状态。

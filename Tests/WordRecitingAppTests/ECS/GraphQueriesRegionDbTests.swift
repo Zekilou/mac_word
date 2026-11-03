@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// db: 版本查询必须能在写事务内使用（System 场景）。
 final class GraphQueriesRegionDbTests: XCTestCase {

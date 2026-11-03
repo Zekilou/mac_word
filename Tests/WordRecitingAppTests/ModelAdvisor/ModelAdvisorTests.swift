@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// ModelAdvisor 测试：advise / minspecs / lookup / HFMirror。
 final class ModelAdvisorTests: XCTestCase {

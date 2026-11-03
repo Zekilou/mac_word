@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 真实 Ollama 端到端测试：验证 LocalLLMGenerator 经 OpenAI 兼容端点
 /// 连本地 Ollama 生成含目标词的文章。

@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 复习相关查询要把 BKT 后验一起带出来。
 final class GraphQueriesStudyBeliefTests: XCTestCase {

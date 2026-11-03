@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 一期-3：连续学习天数（纯函数）。
 final class StreakCalculatorTests: XCTestCase {

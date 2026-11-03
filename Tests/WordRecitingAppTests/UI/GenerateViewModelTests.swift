@@ -1,6 +1,7 @@
 import XCTest
 import GRDB
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 生成方式档位重构测试：
 /// 1. 无纯规则档（已移除）；档位=进程内本地 / 远端 LLM
@@ -343,7 +344,7 @@ final class GenerateViewModelTests: XCTestCase {
         let card = CardListItem(
             cardId: "C1", lemmaId: "L1", text: "abandon", definition: nil,
             dueAt: nil, intervalDays: nil, reps: nil,
-            mastery: 2.0, seenCount: 0, belief: nil)
+            mastery: 2.0, seenCount: 0)
 
         XCTAssertEqual(vm.pickerState(for: card), .known)
     }

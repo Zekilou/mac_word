@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// 正则断句：缩写保护 + 引号内句号不切分。
 final class SentenceSplitterTests: XCTestCase {

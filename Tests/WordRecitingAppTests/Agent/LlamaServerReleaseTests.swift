@@ -1,5 +1,6 @@
 import XCTest
-@testable import WordRecitingApp
+@testable import WordRecitingCore
+@testable import WordRecitingUI
 
 /// LlamaServerRelease URL 构造 + LlamaServerLifecycle 枚举测试。
 /// @ai: 不测网络（latestTag 走真实 GitHub API，集成测试另写）；只测纯函数 URL 构造。
