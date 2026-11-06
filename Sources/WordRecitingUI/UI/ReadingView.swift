@@ -76,9 +76,11 @@ struct ReadingView: View {
 
     private var articleList: some View {
         VStack(spacing: 0) {
+            // 栏头左右内边距对齐 `ListRow`（`Space.rowH`）：原来写的是 `Space.m`，
+            // 比下面的文章标题左移 4pt，栏头看起来「飘」在列表外面。
             Text("文章").font(Type.caption).foregroundStyle(Ink.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, Space.m).padding(.vertical, Space.s)
+                .padding(.horizontal, Space.rowH).padding(.vertical, Space.s)
             Rule()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {

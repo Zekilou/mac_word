@@ -8,26 +8,25 @@ import WordRecitingCore
 // MARK: - 外壳
 
 /// 图表卡片：标题 + 副标题 + 内容，统一分析页的视觉节奏。
+///
+/// @ai: 这里以前自己拼 `.background(textBackgroundColor.opacity(0.5)) +
+///      .clipShape(RoundedRectangle(Radius.control)) + .overlay(separator)` ——
+///      那是**第二套卡片底纹**：圆角 8pt 而 `Card` 是 12pt，底色也不同。
+///      分析页用 ChartCard、设置页用 Card，于是「同样是卡片，长得不一样」——
+///      这正是观感不统一的来源之一。
+///      现在改为 `Section`（管标题节奏）+ `Card`（管边界），全应用只剩一套卡片。
 struct ChartCard<Content: View>: View {
     let title: String
     var subtitle: String? = nil
     @ViewBuilder var content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            VStack(alignment: .leading, spacing: Space.xxs) {
-                Text(title).font(Type.section)
-                if let subtitle {
-                    Text(subtitle).font(Type.caption).foregroundStyle(Ink.tertiary)
-                }
+        Section(title: title, note: subtitle) {
+            Card {
+                content()
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            content()
         }
-        .padding(Space.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.control))
-        .overlay(RoundedRectangle(cornerRadius: Radius.control).stroke(.separator.opacity(0.5), lineWidth: 1))
     }
 }
 

@@ -363,7 +363,8 @@ struct StudyView: View {
                     .foregroundStyle(Ink.tertiary)
             }
         }
+        // @ai: 页面级留白由外层 `PageBody` 统一给（`Space.page`），这里不再叠
+        //      `.padding(Space.xxl)`——两层叠加会变成 48pt，与其他页面对不齐。
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(Space.xxl)
     }
 }

@@ -82,8 +82,7 @@ struct ModelAdvisorView: View {
     // MARK: - 目录卡（等价 /api/lookup + /api/minspecs + 镜像下载）
 
     private var catalogCard: some View {
-        VStack(alignment: .leading, spacing: Space.l) {
-            Text("内置模型目录").font(Type.section)
+        Section(title: "内置模型目录") {
             ForEach(ModelCatalog.all) { model in
                 modelSection(model)
             }

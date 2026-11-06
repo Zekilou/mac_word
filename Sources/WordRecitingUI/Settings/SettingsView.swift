@@ -517,14 +517,14 @@ struct SettingsView: View {
 
     // MARK: - 复用
 
+    /// 设置分组：`Section` 管标题节奏、`Card` 管边界。
+    /// @ai: 这四个设置页以前各有一份逐字相同的手写实现（标题 + Card + VStack），
+    ///      标题字号与卡片内边距各写一遍。现在统一走设计系统组件。
     private func section<Content: View>(
         _ title: String, @ViewBuilder _ content: @escaping () -> Content
     ) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Space.m) {
-                Text(title).font(Type.section)
-                content()
-            }
+        Section(title: title) {
+            Card { content() }
         }
     }
 }
@@ -554,9 +554,8 @@ struct APIConfigEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.l) {
-            Text(config.name.isEmpty ? "添加 API 配置" : "编辑 API 配置")
-                .font(Type.section)
+        Section(title: config.name.isEmpty ? "添加 API 配置" : "编辑 API 配置") {
+            VStack(alignment: .leading, spacing: Space.l) {
             TextField("配置名称（如：本地 Ollama）", text: $name)
                 .textFieldStyle(.roundedBorder)
             Picker("提供商", selection: $provider) {
@@ -594,6 +593,7 @@ struct APIConfigEditor: View {
                         isThinking: config.isThinking))
                     dismiss()
                 }
+            }
             }
         }
         .padding(Space.page)

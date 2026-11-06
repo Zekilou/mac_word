@@ -242,14 +242,14 @@ struct StorageSettingsView: View {
 
     // MARK: - 复用
 
+    /// 设置分组：`Section` 管标题节奏、`Card` 管边界。
+    /// @ai: 这四个设置页以前各有一份逐字相同的手写实现（标题 + Card + VStack），
+    ///      标题字号与卡片内边距各写一遍。现在统一走设计系统组件。
     private func section<Content: View>(
         _ title: String, @ViewBuilder _ content: @escaping () -> Content
     ) -> some View {
-        Card {
-            VStack(alignment: .leading, spacing: Space.m) {
-                Text(title).font(Type.section)
-                content()
-            }
+        Section(title: title) {
+            Card { content() }
         }
     }
 }

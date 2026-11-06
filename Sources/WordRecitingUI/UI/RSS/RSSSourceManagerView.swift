@@ -64,6 +64,10 @@ public struct RSSSourceManagerView: View {
         }
     }
 
+    /// 分组栏头（标题 + 计数 Chip + 可选说明）。
+    /// @ai: 不用 `Section`——这里标题行右侧要放计数 Chip 和说明行，
+    ///      `Section` 的 trailing 无法表达「标题 + Chip 同行、说明另起一行」的节奏。
+    ///      属于规范里的「有意例外」，但字号仍走 `Type.section`。
     private func groupHeader(_ title: String, count: Int, note: String?) -> some View {
         VStack(alignment: .leading, spacing: Space.xxs) {
             HStack(spacing: Space.s) {

@@ -43,9 +43,8 @@ struct SynonymManagerView: View {
     // MARK: - 左面板：添加同义词
 
     private func addPanel(vm: SynonymManagerViewModel) -> some View {
-        VStack(alignment: .leading, spacing: Space.l) {
-            Text("添加同义词映射").font(Type.section)
-
+        Section(title: "添加同义词映射") {
+            VStack(alignment: .leading, spacing: Space.l) {
             // 源词
             VStack(alignment: .leading, spacing: Space.xs) {
                 Text("源词（要被替换的词）").font(Type.caption).foregroundStyle(Ink.secondary)
@@ -102,6 +101,7 @@ struct SynonymManagerView: View {
             }
 
             Spacer(minLength: 0)
+            }
         }
         .padding(Space.page)
         .overlay(alignment: .top) { messageBanners(vm) }

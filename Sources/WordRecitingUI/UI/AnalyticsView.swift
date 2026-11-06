@@ -43,13 +43,10 @@ struct AnalyticsView: View {
 
     @ViewBuilder
     private var abilitySection: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            HStack(spacing: Space.s) {
-                Text("掌握度分布").font(Type.section)
-                Text("BKT 后验概率档位（≥\(MasteryPresentation.percentText(WordMarkState.knownThreshold)) 会 · ≤\(MasteryPresentation.percentText(WordMarkState.unknownThreshold)) 不会 · 中间学习中）")
-                    .font(Type.caption)
-                    .foregroundStyle(Ink.tertiary)
-            }
+        Section(
+            title: "掌握度分布",
+            note: "BKT 后验概率档位（≥\(MasteryPresentation.percentText(WordMarkState.knownThreshold)) 会 · ≤\(MasteryPresentation.percentText(WordMarkState.unknownThreshold)) 不会 · 中间学习中）"
+        ) {
             if let d = vm.distribution, d.total > 0 {
                 LazyVGrid(
                     columns: [GridItem(.adaptive(minimum: GridMetrics.statMin),
@@ -81,22 +78,26 @@ struct AnalyticsView: View {
 
     @ViewBuilder
     private var profileSection: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            HStack(spacing: Space.s) {
-                Text("词汇量画像").font(Type.section)
-                Text("按 BNC/COCA 词族带估算").font(Type.caption).foregroundStyle(Ink.tertiary)
-            }
-            if let p = vm.profile, !p.bands.isEmpty {
-                estimateRow(p)
-                if let cefr = vm.cefr {
-                    cefrCard(cefr)
+        // @ai: 「词汇量画像」自己是一个带标题的正文块；下面两张趋势图是**各自独立的
+        //      图表单元**（`ChartCard` 已自带 `Section` + `Card`）。所以标题只包住
+        //      自己的估算内容，两张图表卡留在标题之外——否则会出现「标题套标题」。
+        VStack(alignment: .leading, spacing: Space.l) {
+            Section(title: "词汇量画像", note: "按 BNC/COCA 词族带估算") {
+                VStack(alignment: .leading, spacing: Space.m) {
+                    if let p = vm.profile, !p.bands.isEmpty {
+                        estimateRow(p)
+                        if let cefr = vm.cefr {
+                            cefrCard(cefr)
+                        }
+                        bandChart(p)
+                        coverageHint(p)
+                        disclaimer
+                    } else {
+                        Text("还没有可估算的数据。事件积累后这里会按词频带给出词汇量估算。")
+                            .font(Type.caption).foregroundStyle(Ink.secondary)
+                            .padding(.vertical, Space.xs)
+                    }
                 }
-                bandChart(p)
-                coverageHint(p)
-                disclaimer
-            } else {
-                Text("还没有可估算的数据。事件积累后这里会按词频带给出词汇量估算。")
-                    .font(Type.caption).foregroundStyle(Ink.secondary).padding(.vertical, Space.xs)
             }
             if !vm.vocabularyTrend.isEmpty {
                 ChartCard(title: "词汇量趋势", subtitle: "每日收盘估算（词族）") {
@@ -210,25 +211,26 @@ struct AnalyticsView: View {
 
     @ViewBuilder
     private var memoryQualitySection: some View {
-        VStack(alignment: .leading, spacing: Space.l) {
-            VStack(alignment: .leading, spacing: Space.xs) {
-                Text("记忆质量").font(Type.section)
-                Text("回答「记牢了吗」——真实保留率、评分分布、经验遗忘曲线")
-                    .font(Type.caption).foregroundStyle(Ink.tertiary)
-            }
+        Section(
+            title: "记忆质量",
+            note: "回答「记牢了吗」——真实保留率、评分分布、经验遗忘曲线"
+        ) {
             if vm.reviewRecords.isEmpty {
                 Text("还没有复习数据。先背几个词，这里会出现保留率与遗忘曲线。")
                     .font(Type.caption).foregroundStyle(Ink.secondary).padding(.vertical, Space.xs)
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: GridMetrics.chartMin), spacing: Space.l)],
-                          alignment: .leading, spacing: Space.l) {
-                    retentionCard
-                    ratingCard
-                    forgettingCurveCard
-                    intervalCard
-                    factorCard
+                // 卡片网格与「顽固词」是两块独立图表单元，保持原来的 Space.l 节奏。
+                VStack(alignment: .leading, spacing: Space.l) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: GridMetrics.chartMin), spacing: Space.l)],
+                              alignment: .leading, spacing: Space.l) {
+                        retentionCard
+                        ratingCard
+                        forgettingCurveCard
+                        intervalCard
+                        factorCard
+                    }
+                    leechCard
                 }
-                leechCard
             }
         }
     }
@@ -330,20 +332,21 @@ struct AnalyticsView: View {
 
     @ViewBuilder
     private var behaviorSection: some View {
-        VStack(alignment: .leading, spacing: Space.l) {
-            VStack(alignment: .leading, spacing: Space.xs) {
-                Text("学习行为").font(Type.section)
-                Text("回答「学得勤吗」——日历热力图、连续天数、复习量与时段分布")
-                    .font(Type.caption).foregroundStyle(Ink.tertiary)
-            }
+        Section(
+            title: "学习行为",
+            note: "回答「学得勤吗」——日历热力图、连续天数、复习量与时段分布"
+        ) {
             if vm.dailyStats.isEmpty {
                 Text("还没有学习记录。").font(Type.caption).foregroundStyle(Ink.secondary)
             } else {
-                heatmapCard
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: GridMetrics.chartMin), spacing: Space.l)],
-                          alignment: .leading, spacing: Space.l) {
-                    volumeCard
-                    hourCard
+                // 热力图与两张图表卡是独立图表单元，保持原来的 Space.l 节奏。
+                VStack(alignment: .leading, spacing: Space.l) {
+                    heatmapCard
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: GridMetrics.chartMin), spacing: Space.l)],
+                              alignment: .leading, spacing: Space.l) {
+                        volumeCard
+                        hourCard
+                    }
                 }
             }
         }
@@ -408,12 +411,10 @@ struct AnalyticsView: View {
 
     @ViewBuilder
     private var forecastSection: some View {
-        VStack(alignment: .leading, spacing: Space.l) {
-            VStack(alignment: .leading, spacing: Space.xs) {
-                Text("负载预测").font(Type.section)
-                Text("回答「接下来有多忙」——复习队列内卡片的未来 30 天到期分布")
-                    .font(Type.caption).foregroundStyle(Ink.tertiary)
-            }
+        Section(
+            title: "负载预测",
+            note: "回答「接下来有多忙」——复习队列内卡片的未来 30 天到期分布"
+        ) {
             if vm.forecast.isEmpty {
                 Text("还没有可预测的卡片。").font(Type.caption).foregroundStyle(Ink.secondary)
             } else {
@@ -442,12 +443,10 @@ struct AnalyticsView: View {
     // MARK: - 复习表现（词库卡片维度的背诵数据）
 
     private var reviewSection: some View {
-        VStack(alignment: .leading, spacing: Space.l) {
-            VStack(alignment: .leading, spacing: Space.xs) {
-                Text("复习统计").font(Type.section)
-                Text("卡片维度：与上面的词汇画像不是同一层级（这里是背诵调度数据）")
-                    .font(Type.caption).foregroundStyle(Ink.tertiary)
-            }
+        Section(
+            title: "复习统计",
+            note: "卡片维度：与上面的词汇画像不是同一层级（这里是背诵调度数据）"
+        ) {
             statGrid
         }
     }

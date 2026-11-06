@@ -118,6 +118,9 @@ struct SystemDictionaryView: View {
             Rule()
             VStack(alignment: .leading, spacing: Space.m) {
                 HStack(spacing: Space.m) {
+                    // @ai: 保留手写标题而非 Section——这里标题右侧紧跟「概率徽章」，
+                    //      Section 的 trailing 只能放 AnyView 且会改变 baseline 对齐；
+                    //      这一处由 HStack 直接管理更准确。属于规范里的「有意例外」。
                     Text("词画像").font(Type.section)
                     if let belief = vm.belief {
                         Text(MasteryPresentation.percentText(belief))

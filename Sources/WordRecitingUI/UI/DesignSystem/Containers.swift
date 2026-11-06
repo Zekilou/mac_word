@@ -6,10 +6,47 @@ import WordRecitingCore
 // @ai: 替换掉 41 处手写 `RoundedRectangle + background + overlay` 组合。
 //      它们的问题不是「难看」，而是**层级不可读**：卡片和面板用了同样的底、
 //      同样的圆角、差 2pt 的间距，于是用户分不清哪块是容器、哪块是内容。
+//
+// ===================== 容器语义规范（强制） =====================
+//
+// 判断「该不该用 Card」只有一个问题：**这块内容是一个独立、可整体指代的对象吗？**
+//
+// ┌ Card（`Surface.card` + `Radius.card` 12pt + 描边 + `Space.l` 内边距）
+// │   用于：一个**自成一体的内容单元**，用户会把它当成「一张」来读。
+// │   典型：图表块（一个图 + 标题）、设置分组（一组相关开关）、
+// │         统计卡、模型推荐卡、段落正文块。
+// │   反面：列表行、工具条、侧栏区块、行内标签 —— 这些不该用 Card。
+// │
+// ├ Panel（`Surface.panel` + `Radius.control` 8pt + 无描边 + `Space.l`）
+// │   用于：**从属于更大结构的分组**，视觉上要比 Card 轻一档。
+// │   典型：配置分组（参数 / 流程）、侧栏区块、可滚动清单的容器。
+// │   区别：Card 是「一张卡」，Panel 是「一块分区」。
+// │
+// ├ Section（标题 + 可选说明 + 内容，**自带 15pt 半粗标题**）
+// │   用于：**任何需要区块标题的地方**。不要再手写 `Text(...).font(Type.section)`。
+// │   需要容器时用 `Section { Card { … } }`，Section 管标题节奏、Card 管边界。
+// │
+// ├ ListRow（`Space.rowH`/`rowV` + hover/选中态）
+// │   用于：**列表里的一行**。行不套 Card——列表本身就是一个容器。
+// │
+// └ EmptyState（图标 + 标题 + 说明，居中）
+//    用于：**没有内容时的提示**。不要手写 Image + Text + Spacer。
+//
+// 一致性规则：
+//   1. 同一页面里，**同层级的内容单元必须用同一种容器**。不许有的图表套 Card、
+//      有的裸放。
+//   2. 容器**不嵌套同级别容器**（Card 里不要再套 Card；需要分组用 Panel 或 Rule）。
+//   3. **不要**自己拼 `RoundedRectangle + background + overlay` —— 那就是在重写
+//      Card/Panel，必然与它们产生 2pt 级的差异，正是「观感不统一」的来源。
+//   4. 需要特殊视觉（强调色底、毛玻璃、按状态染色）时，**改用 Card/Panel 作为
+//      底，在其上用 overlay 加特殊效果**，而不是另起一套底纹。
 
 // MARK: 卡片
 
-/// 卡片：内容块的最小容器。
+/// 卡片：**自成一体的内容单元**（图表块、设置分组、统计卡、正文块）。
+///
+/// @ai: 判据是「这块内容能不能被整体指代为『那张卡』」。
+///      列表行、工具条、侧栏区块、行内标签**不用** Card —— 见文件头的语义规范。
 struct Card<Content: View>: View {
     var padding: CGFloat = Space.l
     @ViewBuilder let content: () -> Content
@@ -28,7 +65,8 @@ struct Card<Content: View>: View {
 
 // MARK: 面板
 
-/// 面板：比卡片更轻的容器（用于侧栏区块、配置分组）。
+/// 面板：**从属于更大结构的分组**（配置分组、侧栏区块、清单容器）。
+/// 比 Card 轻一档：无描边、圆角 8pt、底为 `Surface.panel`。
 struct Panel<Content: View>: View {
     var padding: CGFloat = Space.l
     @ViewBuilder let content: () -> Content

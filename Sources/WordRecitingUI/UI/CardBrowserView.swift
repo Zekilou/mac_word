@@ -193,38 +193,40 @@ struct CardBrowserView: View {
                 Rule()
 
                 // 同义词（词多时折叠，避免标签墙撑爆详情区）
-                Text("同义词").font(Type.section)
-                if detail.synonyms.isEmpty {
-                    Text("暂无同义词映射")
-                        .font(Type.caption).foregroundStyle(Ink.tertiary)
-                } else {
-                    let labels = detail.synonyms.map { $0.surfaceForm ?? "(无表面形式)" }
-                    ChipWall(words: labels, maxVisible: 15, minWidth: 90) { label in
-                        PlainChip(word: label)
+                Section(title: "同义词") {
+                    if detail.synonyms.isEmpty {
+                        Text("暂无同义词映射")
+                            .font(Type.caption).foregroundStyle(Ink.tertiary)
+                    } else {
+                        let labels = detail.synonyms.map { $0.surfaceForm ?? "(无表面形式)" }
+                        ChipWall(words: labels, maxVisible: 15, minWidth: 90) { label in
+                            PlainChip(word: label)
+                        }
                     }
                 }
                 Rule()
 
                 // 出现过的文章
-                Text("出现过的文章").font(Type.section)
+                Section(title: "出现过的文章") {
                 if detail.articles.isEmpty {
                     Text("该词尚未出现在生成文章中")
                         .font(Type.caption).foregroundStyle(Ink.tertiary)
                 } else {
                     ForEach(detail.articles, id: \.articleId) { hit in
-                        VStack(alignment: .leading, spacing: Space.xxs) {
-                            Text(hit.preview)
-                                .font(Type.caption)
-                                .lineLimit(2)
-                                .foregroundStyle(Ink.primary)
-                            Text(hit.createdAt, style: .date)
-                                .font(Type.micro).foregroundStyle(Ink.tertiary)
+                        // @ai: 文章命中行是从属于「出现过的文章」分组的小卡片，
+                        //      用 Panel（比 Card 轻一档），不再自绘底纹。
+                        Panel(padding: Space.m) {
+                            VStack(alignment: .leading, spacing: Space.xxs) {
+                                Text(hit.preview)
+                                    .font(Type.caption)
+                                    .lineLimit(2)
+                                    .foregroundStyle(Ink.primary)
+                                Text(hit.createdAt, style: .date)
+                                    .font(Type.micro).foregroundStyle(Ink.tertiary)
+                            }
                         }
-                        .padding(Space.m)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-                        .clipShape(RoundedRectangle(cornerRadius: Radius.chip))
                     }
+                }
                 }
                 Spacer(minLength: 0)
             }
