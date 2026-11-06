@@ -123,6 +123,14 @@ struct Section<Content: View>: View {
 ///      这是「各种边距」的直接来源。现在默认 `Space.page` + 区块间距 `Space.section`；
 ///      **只有真正需要通栏的内容**（贴边列表、满宽图表）才传 `contentPadding: 0`
 ///      并在内部自行处理——不要为了局部对齐而在页面里再叠一层 padding。
+///
+///      ⚠️ **工具条里不要写页面标题。** 标题由导航层（`ContentView` 的
+///      `appColumn(_:)`）唯一提供。曾经出过两个 bug：
+///        · `VocabularyInitView` 工具条写「词汇」，而二级栏也叫「词汇」→ 同屏两个。
+///        · `AnalyticsView` 工具条写「学习数据」，而二级栏叫「分析」→ 同页两个名字。
+///      判断标准：这段文字能不能在导航里找到？能找到就删。
+///      工具条只放导航给不了的东西：计数、模式切换、搜索框、操作按钮、
+///      以及当前上下文标识（如「词库名 + 卡片数」）。
 struct PageScaffold<Toolbar: View, Content: View>: View {
     var toolbarLeading: CGFloat = Space.toolbarH
     /// 内容区统一边距（四边）。通栏内容传 0。

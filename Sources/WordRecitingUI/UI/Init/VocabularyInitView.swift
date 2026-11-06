@@ -38,49 +38,66 @@ struct VocabularyInitView: View {
 
     // MARK: - 顶部：说明 + 掌握度概览 + 次级导航
 
+    /// 工具条：**只放操作与状态，不放页面标题**。
+    ///
+    /// @ai: 这里以前有一行 `Text("词汇").font(Type.title)`——而二级导航栏
+    ///      已经写着「词汇」了（`ContentView` 的 `appColumn("词汇", …)`）。
+    ///      同一屏因此出现两次同样的标题。
+    ///
+    ///      **规则：页面标题归导航层唯一提供，页面不得自己声明。**
+    ///      判断标准是「这段文字能不能在导航里找到」——能找到就删。
+    ///      页面该放的只有导航给不了的东西：计数、模式切换、操作按钮。
     private var header: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Text("词汇")
-                .font(Type.title)
-            InfoHint(text: "词汇是全局上下文，用于后续文章选词。只记会不会，不建卡。")
-                .foregroundStyle(Ink.secondary)
-            HStack(spacing: Space.l) {
+        HStack(spacing: Space.l) {
+            // 四个计数直接并排；用分隔线区分「已判定」与「未判定」两组。
+            overviewGroup {
                 overviewChip(value: vm.overview.known, label: "已会", color: .green)
                 overviewChip(value: vm.overview.unknown, label: "不会", color: .red)
+            }
+            Rule().frame(height: Size.iconTiny)
+            overviewGroup {
                 overviewChip(value: vm.overview.seen, label: "出现过", color: .blue)
-                overviewChip(value: vm.overview.unmarked, label: "未标记", color: .secondary)
-                Spacer()
-                VStack(alignment: .leading, spacing: Space.xxs) {
-                    Picker("", selection: $mode) {
-                        ForEach(VocabMode.allCases) { m in
-                            Text(m.rawValue).tag(m)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .frame(maxWidth: 250)
-                    Text(mode == .initFlow
-                         ? "一次性引导：生成易读段落，标出不认识的词，建立初始掌握度"
-                         : "日常档案：查看、搜索、筛选所有有记录的词")
-                        .font(Type.micro)
-                        .foregroundStyle(Ink.tertiary)
-                }
-                if mode == .initFlow, vm.hasParagraph {
-                    DButton("重新生成一段", rank: .quiet) { vm.reset() }
+                overviewChip(value: vm.overview.unmarked, label: "未标记", color: Ink.secondary)
+            }
+
+            Spacer(minLength: Space.m)
+
+            if mode == .initFlow, vm.hasParagraph {
+                DButton("重新生成", rank: .quiet) { vm.reset() }
+            }
+            Picker("", selection: $mode) {
+                ForEach(VocabMode.allCases) { m in
+                    Text(m.rawValue).tag(m)
                 }
             }
-            .padding(.vertical, Space.xxs)
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: Size.segmentedMode)
+            .help(mode == .initFlow
+                  ? "一次性引导：生成一段英文，标出不会的词"
+                  : "日常档案：查看、搜索、筛选所有有记录的词")
         }
-        // 页面级留白由 `PageScaffold` 工具条提供，这里不再叠 `.padding(Space.page)`；
-        // 补 `maxWidth` 让标题行在工具条里仍然通栏左对齐（与迁移前一致）。
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func overviewGroup<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: Space.m) { content() }
+    }
+
+    /// 计数项：**数字用等宽强调、标签弱化**，而不是把两者拼成一个字符串。
+    /// @ai: 原来是 `Text("\(value) \(label)")`——四个计数用 `·` 连起来读成
+    ///      「1,198 已会 · 28 不会 · 1,527 出现过 · 300 未标记」，像一句话。
+    ///      数字要能一眼扫到，所以给数字独立字重 + 等宽（否则 9→10 会抖）。
     private func overviewChip(value: Int, label: String, color: Color) -> some View {
         HStack(spacing: Space.xs) {
             Circle().fill(color).frame(width: Size.dot, height: Size.dot)
-            Text("\(value) \(label)")
-                .font(Type.caption).foregroundStyle(Ink.secondary)
+            Text("\(value)")
+                .font(Type.captionEmphasis)
+                .monospacedDigit()
+                .foregroundStyle(Ink.primary)
+            Text(label)
+                .font(Type.caption)
+                .foregroundStyle(Ink.secondary)
         }
     }
 

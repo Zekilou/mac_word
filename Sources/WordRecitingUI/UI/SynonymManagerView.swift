@@ -26,7 +26,14 @@ struct SynonymManagerView: View {
     ///      「HStack + 固定宽 + Rule + 弹性宽」。
     private func content(vm: SynonymManagerViewModel) -> some View {
         PageScaffold(scrolls: false) {
-            Text("已定义同义词（\(vm.mappings.count)）").font(Type.section)
+            // @ai: 不写页面标题（二级栏已写「同义词」）。只留计数——那是导航给不了的。
+            Text("\(vm.mappings.count)")
+                .font(Type.section)
+                .monospacedDigit()
+                .foregroundStyle(Ink.secondary)
+            Text("条映射")
+                .font(Type.caption)
+                .foregroundStyle(Ink.tertiary)
             Spacer(minLength: Space.m)
             IconButton(icon: "arrow.clockwise", help: "刷新") { vm.reload() }
         } content: {

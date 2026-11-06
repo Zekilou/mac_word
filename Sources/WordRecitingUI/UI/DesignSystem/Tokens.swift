@@ -243,6 +243,8 @@ enum Size {
     static let colPercent: CGFloat = 40
     static let colLabel: CGFloat = 72
     static let colCount: CGFloat = 48
+    /// 两档模式切换器（词汇：初始化 / 档案）。
+    static let segmentedMode: CGFloat = 180
     static let colNarrow: CGFloat = 36
     /// 状态圆点。
     static let dot: CGFloat = 8

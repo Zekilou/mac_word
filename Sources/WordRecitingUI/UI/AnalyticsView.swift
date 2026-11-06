@@ -16,8 +16,10 @@ struct AnalyticsView: View {
     ///      现在交给 `PageScaffold`：标题行进 `toolbar`，主体进 `content`，
     ///      滚动与页面级边距由骨架统一提供（不再有第二套页面 padding）。
     var body: some View {
+        // @ai: 工具条**不再写页面标题**。二级导航写的是「分析」，这里之前写的是
+        //      「学习数据」——两处都在描述同一个页面，却用两个词。
+        //      标题归导航层唯一提供，工具条只留操作。
         PageScaffold {
-            Text("学习数据").font(Type.section)
             Spacer()
             IconButton(icon: "arrow.clockwise", help: "刷新") { vm.reload() }
         } content: {
