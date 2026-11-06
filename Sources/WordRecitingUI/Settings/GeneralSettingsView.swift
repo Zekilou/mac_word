@@ -41,9 +41,7 @@ struct GeneralSettingsView: View {
                              + "实际仍按 SM-2 计复习间隔。")
                             .font(Type.caption)
                             .foregroundStyle(.orange)
-                        Button("切回 SM-2") { settings.schedulerID = .sm2 }
-                            .buttonStyle(.borderless)
-                            .font(Type.caption)
+                        DButton("切回 SM-2", rank: .quiet) { settings.schedulerID = .sm2 }
                     }
                 }
             }
@@ -88,13 +86,9 @@ struct GeneralSettingsView: View {
                 infoRow("版权", "© 2026 本项目 · 个人学习用途")
                 Text("开源致谢：GRDB（数据库）、llama.swift（进程内推理）、HFMirror（国内镜像）。")
                     .font(Type.caption).foregroundStyle(Ink.secondary)
-                Button {
+                DButton("打开数据目录", rank: .secondary, icon: "folder") {
                     openDataDirectory()
-                } label: {
-                    Label("打开数据目录", systemImage: "folder")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
                 Text("数据目录：~/Library/Application Support/\(AppIdentity.supportDirName)")
                     .font(Type.micro).foregroundStyle(Ink.tertiary)
             }
@@ -141,16 +135,13 @@ struct GeneralSettingsView: View {
     }
 
     private func section<Content: View>(
-        _ title: String, @ViewBuilder _ content: () -> Content
+        _ title: String, @ViewBuilder _ content: @escaping () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Text(title).font(Type.section)
-            content()
+        Card {
+            VStack(alignment: .leading, spacing: Space.m) {
+                Text(title).font(Type.section)
+                content()
+            }
         }
-        .padding(Space.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.card))
-        .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(.separator.opacity(0.5), lineWidth: 1))
     }
 }

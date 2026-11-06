@@ -63,9 +63,7 @@ struct VocabularyInitView: View {
                         .foregroundStyle(Ink.tertiary)
                 }
                 if mode == .initFlow, vm.hasParagraph {
-                    Button("重新生成一段") { vm.reset() }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(Color.accentColor)
+                    DButton("重新生成一段", rank: .quiet) { vm.reset() }
                 }
             }
             .padding(.vertical, Space.xxs)
@@ -122,14 +120,9 @@ struct VocabularyInitView: View {
             Text("生成模型：\(vm.generationModelLabel)（在「设置」中修改）")
                 .font(Type.micro)
                 .foregroundStyle(Ink.tertiary)
-            Button {
+            DButton("生成一段英文", rank: .primary, icon: "sparkles") {
                 vm.generate(ease: .medium)
-            } label: {
-                Label("生成一段英文", systemImage: "sparkles")
-                    .padding(.horizontal, Space.xl)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
             if let msg = vm.errorMessage {
                 Text(msg).font(Type.caption).foregroundStyle(.red)
             }
@@ -144,21 +137,21 @@ struct VocabularyInitView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.l) {
                     legend
-                    FlowWordsLayout(spacing: Space.xxs) {
-                        ForEach(Self.tokens(of: vm.paragraph)) { tok in
-                            if tok.isWord,
-                               let word = vm.words.first(where: {
-                                   $0.lemma == WordNormalizer.normalize(tok.text.lowercased())
-                               }) {
-                                wordChip(word)
-                            } else {
-                                Text(tok.text)
-                                    .font(Type.lead)
+                    Card(padding: Space.page) {
+                        FlowWordsLayout(spacing: Space.xxs) {
+                            ForEach(Self.tokens(of: vm.paragraph)) { tok in
+                                if tok.isWord,
+                                   let word = vm.words.first(where: {
+                                       $0.lemma == WordNormalizer.normalize(tok.text.lowercased())
+                                   }) {
+                                    wordChip(word)
+                                } else {
+                                    Text(tok.text)
+                                        .font(Type.lead)
+                                }
                             }
                         }
                     }
-                    .padding(Space.page)
-                    .background(RoundedRectangle(cornerRadius: Radius.card).fill(.quaternary.opacity(0.35)))
                 }
                 .padding(Space.page)
             }
@@ -238,21 +231,18 @@ struct VocabularyInitView: View {
     /// 底部操作栏：重新生成（更简单）+ 提交。
     private var bottomBar: some View {
         HStack {
-            Button("太难了，换更简单的") { vm.regenerateSimpler() }
-                .buttonStyle(.bordered)
-                .help("用更基础的词重新生成一段")
+            DButton("太难了，换更简单的", rank: .secondary,
+                    help: "用更基础的词重新生成一段") {
+                vm.regenerateSimpler()
+            }
             Spacer()
             if let msg = vm.errorMessage {
                 Text(msg).font(Type.caption).foregroundStyle(.red)
             }
-            Button {
+            DButton("提交词汇记录", rank: .primary, icon: "checkmark.circle",
+                    disabled: vm.words.isEmpty) {
                 vm.submit()
-            } label: {
-                Label("提交词汇记录", systemImage: "checkmark.circle")
-                    .padding(.horizontal, Space.rowH)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(vm.words.isEmpty)
         }
         .padding(Space.l)
     }
@@ -283,10 +273,8 @@ struct VocabularyInitView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
             HStack(spacing: Space.l) {
-                Button("再生成一段") { vm.reset() }
-                    .buttonStyle(.bordered)
-                Button("完成") { vm.refreshOverview() }
-                    .buttonStyle(.borderedProminent)
+                DButton("再生成一段", rank: .secondary) { vm.reset() }
+                DButton("完成", rank: .primary) { vm.refreshOverview() }
             }
         }
         .padding(Space.xxxl)

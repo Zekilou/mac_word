@@ -53,16 +53,13 @@ struct DisplaySettingsView: View {
     // MARK: - 复用
 
     private func section<Content: View>(
-        _ title: String, @ViewBuilder _ content: () -> Content
+        _ title: String, @ViewBuilder _ content: @escaping () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Text(title).font(Type.section)
-            content()
+        Card {
+            VStack(alignment: .leading, spacing: Space.m) {
+                Text(title).font(Type.section)
+                content()
+            }
         }
-        .padding(Space.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.card))
-        .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(.separator.opacity(0.5), lineWidth: 1))
     }
 }

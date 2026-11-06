@@ -106,18 +106,32 @@ struct IconButton: View {
     let icon: String
     var help: String? = nil
     var disabled: Bool = false
+    /// 破坏性语义染色（删除类操作）。默认 nil = 中性灰。
+    /// @ai: 加这个参数是为了替代以前各页手写的 `.foregroundStyle(.red)`——
+    ///      收敛到设计系统后若不留入口，删除按钮就会失去「危险」的视觉暗示。
+    var tint: Color? = nil
     let action: () -> Void
 
     @State private var hovering = false
+
+    private var restingColor: Color {
+        if let tint { return tint.opacity(disabled ? 0.4 : 0.85) }
+        return Ink.secondary
+    }
+
+    private var hoverColor: Color {
+        if let tint { return tint }
+        return Ink.primary
+    }
 
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 12))
-                .foregroundStyle(hovering ? Ink.primary : Ink.secondary)
-                .frame(width: 24, height: 24)
+                .foregroundStyle(hovering ? hoverColor : restingColor)
+                .frame(width: Size.iconButton, height: Size.iconButton)
                 .background(
-                    hovering ? Ink.primary.opacity(0.07) : .clear,
+                    hovering ? (tint ?? Ink.primary).opacity(0.09) : .clear,
                     in: .rect(cornerRadius: Radius.chip))
         }
         .buttonStyle(.plain)

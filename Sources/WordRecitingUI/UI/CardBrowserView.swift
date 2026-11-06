@@ -170,14 +170,10 @@ struct CardBrowserView: View {
                     Spacer()
                     // 删除这张卡片（保留该词的全局掌握度）
                     if let card = vm.selected, card.lemmaId == detail.lemmaId {
-                        Button(role: .destructive) {
+                        DButton("删除卡片", rank: .destructive, icon: "trash",
+                                help: "从词库移除这张卡片（该词的掌握度与学习记录保留）") {
                             pendingCardDeletion = card
-                        } label: {
-                            Label("删除卡片", systemImage: "trash")
-                                .font(Type.caption)
                         }
-                        .buttonStyle(.borderless)
-                        .help("从词库移除这张卡片（该词的掌握度与学习记录保留）")
                     }
                 }
                 if let def = detail.definition, !def.isEmpty {

@@ -32,15 +32,10 @@ extension GenerateView {
                 .padding(Space.l)
             },
             footer: {
-                Button {
+                DButton("生成文章", rank: .primary, icon: "sparkles",
+                        fullWidth: true, disabled: vm.isGenerating) {
                     vm.runGenerate()
-                } label: {
-                    Label("生成文章", systemImage: "sparkles")
-                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(vm.isGenerating)
                 if let err = vm.errorMessage {
                     Text(err).font(Type.caption).foregroundStyle(.red)
                 }
@@ -78,11 +73,9 @@ extension GenerateView {
         ColumnShell(
             title: "选词器",
             trailing: {
-                Button { showPicker = false } label: {
-                    Image(systemName: "chevron.compact.left")
+                IconButton(icon: "chevron.compact.left", help: "收起选词器") {
+                    showPicker = false
                 }
-                .buttonStyle(.borderless)
-                .help("收起选词器")
             },
             content: {
                 VStack(alignment: .leading, spacing: Space.m) {
@@ -121,13 +114,10 @@ extension GenerateView {
                 .padding(Space.l)
             },
             footer: {
-                Button {
+                DButton("清空已选", rank: .secondary, icon: "xmark.circle",
+                        disabled: vm.pickedLemmaIds.isEmpty) {
                     vm.pickedLemmaIds.removeAll()
-                } label: {
-                    Label("清空已选", systemImage: "xmark.circle")
                 }
-                .buttonStyle(.bordered)
-                .disabled(vm.pickedLemmaIds.isEmpty)
             })
         .frame(width: Size.panePicker)
         .frame(maxHeight: .infinity, alignment: .top)

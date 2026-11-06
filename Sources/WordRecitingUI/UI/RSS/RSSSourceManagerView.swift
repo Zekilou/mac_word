@@ -3,104 +3,110 @@ import WordRecitingCore
 
 /// RSS 源管理（数据区「RSS 源」子区，spec §4.1）：内置 + 自定义源列表，增删管理。
 /// 阅读文章在「阅读」子区（ReadingView）；这里只负责源配置。
-/// @ai: 不用 List（macOS 27 beta 拖分栏崩溃规避），列表用 ScrollView + LazyVStack。
+///
+/// @ai: 不用 `List`（macOS 27 beta 拖分栏会触发 FocusBridge key-view-loop 崩溃），
+///      列表用 `ScrollView + LazyVStack`。
+///      结构全部走设计系统：工具条 `PageScaffold`、分行 `ListRow`、空态 `EmptyState`、
+///      按钮 `DButton`/`IconButton`——**不要再手写 padding / 圆角 / 按钮样式**。
 public struct RSSSourceManagerView: View {
     @State private var store = RSSSourceStore.shared
     @State private var showAddSource = false
 
+    public init() {}
+
     public var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            Divider()
+        PageScaffold {
+            Text("管理阅读来源，内置不可删，自定义可随时移除。")
+                .font(Type.caption)
+                .foregroundStyle(Ink.secondary)
+            Spacer(minLength: Space.m)
+            DButton("添加自定义源", rank: .secondary, icon: "plus") {
+                showAddSource = true
+            }
+        } content: {
             sourceList
         }
-        .sheet(isPresented: $showAddSource) { addSourceSheet }
-    }
-
-    // MARK: - 顶栏
-
-    private var topBar: some View {
-        HStack(spacing: 10) {
-            Text("管理阅读来源，内置不可删，自定义可随时移除。")
-                .font(.caption).foregroundStyle(.secondary)
-            Spacer()
-            Button {
-                showAddSource = true
-            } label: {
-                Label("添加自定义源", systemImage: "plus")
+        .sheet(isPresented: $showAddSource) {
+            AddSourceForm { title, urlString in
+                store.addCustom(title: title, urlString: urlString)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
         }
-        .padding(10)
     }
 
     // MARK: - 源列表
 
     private var sourceList: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 4) {
-                Text("内置源（\(RSSSourceStore.builtIn.count)）")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .padding(.top, 6)
+            LazyVStack(alignment: .leading, spacing: 0) {
+                groupHeader(
+                    "内置源",
+                    count: RSSSourceStore.builtIn.count,
+                    note: "来自内置目录，不可移除")
                 ForEach(RSSSourceStore.builtIn) { source in
                     sourceRow(source, removable: false)
                 }
 
-                Text("自定义源（\(store.custom.count)）")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .padding(.top, 12)
+                groupHeader("自定义源", count: store.custom.count, note: nil)
                 if store.custom.isEmpty {
-                    Text("暂无自定义源，点击右上角「添加自定义源」。")
-                        .font(.caption).foregroundStyle(.tertiary)
-                        .padding(.vertical, 4)
+                    EmptyState(
+                        icon: "dot.radiowaves.left.and.right",
+                        title: "暂无自定义源",
+                        message: "点击右上角「添加自定义源」，填入标题与 RSS 地址即可。")
+                        .frame(height: 160)
                 } else {
                     ForEach(store.custom) { source in
                         sourceRow(source, removable: true)
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
+            .padding(.horizontal, Space.page)
+            .padding(.bottom, Space.page)
         }
+    }
+
+    private func groupHeader(_ title: String, count: Int, note: String?) -> some View {
+        VStack(alignment: .leading, spacing: Space.xxs) {
+            HStack(spacing: Space.s) {
+                Text(title).font(Type.section)
+                Chip(text: "\(count)", tint: Ink.secondary)
+                Spacer(minLength: 0)
+            }
+            if let note {
+                Text(note).font(Type.micro).foregroundStyle(Ink.tertiary)
+            }
+        }
+        .padding(.top, Space.l)
+        .padding(.bottom, Space.s)
     }
 
     private func sourceRow(_ source: RSSSource, removable: Bool) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "dot.radiowaves.left.and.right")
-                .foregroundStyle(.secondary)
-                .frame(width: 16)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(source.title).font(.callout)
-                Text(source.urlString)
-                    .font(.caption2).foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            if removable {
-                Button {
-                    store.remove(source.id)
-                } label: {
-                    Image(systemName: "trash")
+        VStack(spacing: 0) {
+            ListRow {
+                HStack(spacing: Space.m) {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(IconSize.control)
+                        .foregroundStyle(Ink.secondary)
+                        .frame(width: Size.iconTiny)
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text(source.title)
+                            .font(Type.emphasis)
+                            .foregroundStyle(Ink.primary)
+                        Text(source.urlString)
+                            .font(Type.micro)
+                            .foregroundStyle(Ink.tertiary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: Space.m)
+                    if removable {
+                        IconButton(icon: "trash", help: "删除该源", tint: .red) {
+                            store.remove(source.id)
+                        }
+                    } else {
+                        Chip(text: "内置", tint: Ink.tertiary)
+                    }
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.red)
-                .help("删除该源")
-            } else {
-                Text("内置")
-                    .font(.caption2).foregroundStyle(.tertiary)
             }
-        }
-        .padding(8)
-        .background(.quaternary.opacity(0.15))
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-    }
-
-    // MARK: - 添加源
-
-    private var addSourceSheet: some View {
-        AddSourceForm { title, urlString in
-            store.addCustom(title: title, urlString: urlString)
+            Rule()
         }
     }
 }

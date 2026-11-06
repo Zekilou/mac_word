@@ -8,11 +8,9 @@ extension SettingsView {
     /// 模型顾问：硬件检测 + 推荐模型/量化档 + 一键应用到 llmModel（远端配置区下方）。
     var advisorSection: some View {
         VStack(alignment: .leading, spacing: Space.s) {
-            Button { showAdvisor = true } label: {
-                Label("模型顾问：检测硬件并推荐", systemImage: "cpu")
+            DButton("模型顾问：检测硬件并推荐", rank: .secondary, icon: "cpu") {
+                showAdvisor = true
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
             Text("按你的内存推荐模型与量化档")
                 .font(Type.micro).foregroundStyle(Ink.tertiary)
         }

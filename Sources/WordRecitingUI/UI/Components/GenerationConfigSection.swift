@@ -83,46 +83,42 @@ struct GenerationConfigSection: View {
     // MARK: - 当前模型参数卡
 
     private var parameterCard: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            Text("当前模型参数").font(Type.caption).foregroundStyle(Ink.secondary)
-            ForEach(parameters) { p in
-                HStack(alignment: .top, spacing: Space.s) {
-                    Text(p.label)
-                        .font(Type.micro).foregroundStyle(Ink.tertiary)
-                        .frame(width: Size.colLabel, alignment: .leading)
-                    Text(p.value)
-                        .font(Type.caption)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .lineLimit(2)
+        Panel(padding: Space.m) {
+            VStack(alignment: .leading, spacing: Space.s) {
+                Text("当前模型参数").font(Type.caption).foregroundStyle(Ink.secondary)
+                ForEach(parameters) { p in
+                    HStack(alignment: .top, spacing: Space.s) {
+                        Text(p.label)
+                            .font(Type.micro).foregroundStyle(Ink.tertiary)
+                            .frame(width: Size.colLabel, alignment: .leading)
+                        Text(p.value)
+                            .font(Type.caption)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .lineLimit(2)
+                    }
+                    .help(p.help)
                 }
-                .help(p.help)
             }
         }
-        .padding(Space.m)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.4))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.chip))
     }
 
     /// 生成流程说明卡：让用户知道当前配置下模型实际怎么工作。
     /// @ai: 随配置动态——模型类型（思考型/普通）/ 融入流程（RAG 逐词）/ 词向量来源 / 验证强度。
     private var pipelineCard: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            Text("生成流程").font(Type.caption).foregroundStyle(Ink.secondary)
-            pipelineRow(icon: modelTypeIcon, tint: modelType == .thinking ? .orange : .secondary,
-                        label: "模型类型", value: modelTypeText, help: modelTypeHelp)
-            pipelineRow(icon: "arrow.triangle.branch", tint: .secondary,
-                        label: "融入方式", value: embedFlowText, help: embedFlowHelp)
-            pipelineRow(icon: embeddingSource == .remoteAPI ? "globe" : "internaldrive",
-                        tint: embeddingSource == .remoteAPI ? .blue : .secondary,
-                        label: "词向量", value: embeddingText, help: embeddingSource.help)
-            pipelineRow(icon: "checkmark.seal", tint: .secondary,
-                        label: "验证强度", value: embeddingVerification.label, help: embeddingVerification.help)
+        Panel(padding: Space.m) {
+            VStack(alignment: .leading, spacing: Space.s) {
+                Text("生成流程").font(Type.caption).foregroundStyle(Ink.secondary)
+                pipelineRow(icon: modelTypeIcon, tint: modelType == .thinking ? .orange : .secondary,
+                            label: "模型类型", value: modelTypeText, help: modelTypeHelp)
+                pipelineRow(icon: "arrow.triangle.branch", tint: .secondary,
+                            label: "融入方式", value: embedFlowText, help: embedFlowHelp)
+                pipelineRow(icon: embeddingSource == .remoteAPI ? "globe" : "internaldrive",
+                            tint: embeddingSource == .remoteAPI ? .blue : .secondary,
+                            label: "词向量", value: embeddingText, help: embeddingSource.help)
+                pipelineRow(icon: "checkmark.seal", tint: .secondary,
+                            label: "验证强度", value: embeddingVerification.label, help: embeddingVerification.help)
+            }
         }
-        .padding(Space.m)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.4))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.chip))
     }
 
     private func pipelineRow(icon: String, tint: Color, label: String, value: String, help: String) -> some View {

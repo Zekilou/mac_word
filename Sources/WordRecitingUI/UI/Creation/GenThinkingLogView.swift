@@ -13,47 +13,45 @@ struct GenThinkingLogView: View {
     let onStop: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            HStack(spacing: Space.m) {
-                Text("⏱ 生成过程").font(.caption.weight(.semibold))
-                Spacer()
-                if isGenerating {
-                    Button(role: .destructive) { onStop() } label: {
-                        Label("停止", systemImage: "stop.circle")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            }
-            if isGenerating {
-                currentStageRow
-            }
-            if log.isEmpty {
-                Text("正在启动…")
-                    .font(Type.caption).foregroundStyle(Ink.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, Space.rowV)
-            } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: Space.xxs) {
-                            ForEach(log) { item in
-                                logRow(item)
-                            }
+        Panel(padding: Space.m) {
+            VStack(alignment: .leading, spacing: Space.m) {
+                HStack(spacing: Space.m) {
+                    Text("⏱ 生成过程").font(.caption.weight(.semibold))
+                    Spacer()
+                    if isGenerating {
+                        // 原 Button(role: .destructive) + .bordered：用 destructive 档保留红字语义
+                        DButton("停止", rank: .destructive, icon: "stop.circle") {
+                            onStop()
                         }
-                        .padding(.vertical, Space.xs)
-                    }
-                    .frame(height: 260)
-                    .onChange(of: log.count) { _, _ in
-                        withAnimation { proxy.scrollTo(log.last?.id, anchor: .bottom) }
                     }
                 }
+                if isGenerating {
+                    currentStageRow
+                }
+                if log.isEmpty {
+                    Text("正在启动…")
+                        .font(Type.caption).foregroundStyle(Ink.tertiary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, Space.rowV)
+                } else {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: Space.xxs) {
+                                ForEach(log) { item in
+                                    logRow(item)
+                                }
+                            }
+                            .padding(.vertical, Space.xs)
+                        }
+                        .frame(height: 260)
+                        .onChange(of: log.count) { _, _ in
+                            withAnimation { proxy.scrollTo(log.last?.id, anchor: .bottom) }
+                        }
+                    }
+                }
+                metricsRow
             }
-            metricsRow
         }
-        .padding(Space.m)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.control))
     }
 
     /// 当前阶段：优先模型自己的 THINKING 标记，无则回退管线阶段（醒目标识，等的人一眼看到模型在干嘛）。

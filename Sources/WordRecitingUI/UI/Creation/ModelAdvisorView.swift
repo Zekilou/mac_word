@@ -42,39 +42,33 @@ struct ModelAdvisorView: View {
 
     private var adviceCard: some View {
         let advice = advisor.advise(hardware: hardware)
-        return VStack(alignment: .leading, spacing: Space.m) {
-            Text("硬件评估").font(Type.section)
-            Text(advice.verdict)
-                .font(Type.body)
-                .foregroundStyle(advice.verdict.hasPrefix("✅") ? .green
-                                 : advice.verdict.hasPrefix("⚠️") ? .orange : .red)
-            if let model = advice.recommendedModel, let quant = advice.recommendedQuant {
-                HStack(spacing: Space.m) {
-                    Image(systemName: "sparkles").foregroundStyle(.yellow)
-                    Text("推荐：\(model.displayName) · \(quant.quant)")
-                        .font(Type.body).fontWeight(.semibold)
-                    Text("\(Int(quant.fileSizeGB)) GB 文件")
-                        .font(Type.caption).foregroundStyle(Ink.secondary)
+        return Card {
+            VStack(alignment: .leading, spacing: Space.m) {
+                Text("硬件评估").font(Type.section)
+                Text(advice.verdict)
+                    .font(Type.body)
+                    .foregroundStyle(advice.verdict.hasPrefix("✅") ? .green
+                                     : advice.verdict.hasPrefix("⚠️") ? .orange : .red)
+                if let model = advice.recommendedModel, let quant = advice.recommendedQuant {
+                    HStack(spacing: Space.m) {
+                        Image(systemName: "sparkles").foregroundStyle(.yellow)
+                        Text("推荐：\(model.displayName) · \(quant.quant)")
+                            .font(Type.body).fontWeight(.semibold)
+                        Text("\(Int(quant.fileSizeGB)) GB 文件")
+                            .font(Type.caption).foregroundStyle(Ink.secondary)
+                    }
+                    if quant.recommended {
+                        Text("官方标注为推荐甜点位")
+                            .font(Type.micro).foregroundStyle(Ink.secondary)
+                    }
+                    // 一键填入生成器配置
+                    DButton("填入本地 LLM 配置", rank: .primary, icon: "arrow.down.doc") {
+                        apply(model: model, quant: quant)
+                    }
+                    .padding(.top, Space.xs)
                 }
-                if quant.recommended {
-                    Text("官方标注为推荐甜点位")
-                        .font(Type.micro).foregroundStyle(Ink.secondary)
-                }
-                // 一键填入生成器配置
-                Button {
-                    apply(model: model, quant: quant)
-                } label: {
-                    Label("填入本地 LLM 配置", systemImage: "arrow.down.doc")
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .padding(.top, Space.xs)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(Space.l)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.control))
     }
 
     /// 把推荐模型 ID / 量化档写入生成器的 LLM 配置。
@@ -102,13 +96,9 @@ struct ModelAdvisorView: View {
                 Text(model.displayName).font(Type.caption).fontWeight(.semibold)
                 Text(model.parameterScale).font(Type.caption).foregroundStyle(Ink.secondary)
                 Spacer()
-                Button {
+                DButton("镜像页", rank: .quiet, icon: "globe") {
                     openURL(HFMirror.modelPage(modelID: model.modelID))
-                } label: {
-                    Label("镜像页", systemImage: "globe")
                 }
-                .buttonStyle(.link)
-                .controlSize(.small)
             }
             Text(model.note).font(Type.micro).foregroundStyle(Ink.secondary)
             minspecTable(model)
@@ -151,14 +141,11 @@ struct ModelAdvisorView: View {
                 Text("国内镜像下载（hf-mirror.com）")
                     .font(Type.micro).foregroundStyle(Ink.tertiary)
                 ForEach(result.downloads, id: \.filename) { dl in
-                    Button {
-                        openURL(dl.url)
-                    } label: {
+                    // 保留原有 caption 字号（下载清单是密集列表，不随按钮正文放大）
+                    DButton(rank: .quiet, action: { openURL(dl.url) }) {
                         Label(dl.filename, systemImage: "arrow.down.circle")
                             .font(Type.caption)
                     }
-                    .buttonStyle(.link)
-                    .controlSize(.small)
                 }
             }
             .padding(.top, Space.xxs)

@@ -45,13 +45,9 @@ struct ReadingView: View {
                 .frame(maxWidth: 260)
                 .disabled(vm.sources.isEmpty)
 
-                Button {
+                IconButton(icon: "arrow.clockwise", help: "刷新文章列表") {
                     vm.fetchSource()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
                 }
-                .buttonStyle(.borderless)
-                .help("刷新文章列表")
 
                 if vm.isFetchingSource {
                     ProgressView().controlSize(.small)
@@ -93,9 +89,7 @@ struct ReadingView: View {
 
     private func articleRow(_ item: RSSItem) -> some View {
         let selected = vm.selectedItem?.id == item.id
-        return Button {
-            vm.selectArticle(item)
-        } label: {
+        return ListRow(selected: selected, action: { vm.selectArticle(item) }) {
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(item.title)
                     .font(Type.caption)
@@ -106,13 +100,7 @@ struct ReadingView: View {
                         .font(Type.micro).foregroundStyle(Ink.secondary)
                 }
             }
-            .padding(Space.m)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? Color.accentColor.opacity(0.15) : .clear)
-            .clipShape(RoundedRectangle(cornerRadius: Radius.chip))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - 阅读区
@@ -142,13 +130,9 @@ struct ReadingView: View {
                 }
             }
         } else {
-            VStack(spacing: Space.m) {
-                Image(systemName: "newspaper")
-                    .font(IconSize.empty).foregroundStyle(Ink.secondary)
-                Text("从左侧选择一篇文章开始阅读")
-                    .foregroundStyle(Ink.secondary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            EmptyState(
+                icon: "newspaper",
+                title: "从左侧选择一篇文章开始阅读")
         }
     }
 
@@ -174,14 +158,10 @@ struct ReadingView: View {
         if let url = URL(string: item.link), !item.link.isEmpty {
             VStack(spacing: Space.s) {
                 Rule()
-                Button {
+                DButton("Continue Reading", rank: .primary, icon: "arrow.right",
+                        help: "在浏览器中打开原文") {
                     NSWorkspace.shared.open(url)
-                } label: {
-                    Label("Continue Reading", systemImage: "arrow.right")
-                        .font(Type.caption)
                 }
-                .buttonStyle(.borderedProminent)
-                .help("在浏览器中打开原文")
                 Text("摘要仅一小段，全文请在浏览器中阅读")
                     .font(Type.micro).foregroundStyle(Ink.secondary)
             }

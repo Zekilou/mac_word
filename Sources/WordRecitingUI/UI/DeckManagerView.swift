@@ -41,11 +41,8 @@ struct DeckManagerView: View {
         VStack(spacing: 0) {
             // 工具栏：导入按钮
             HStack {
-                Button(action: { showFilePicker = true }) {
-                    Label("导入词库", systemImage: "square.and.arrow.down")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(vm.isImporting)
+                DButton("导入词库", rank: .primary, icon: "square.and.arrow.down",
+                        disabled: vm.isImporting) { showFilePicker = true }
 
                 if vm.isImporting {
                     ProgressView(value: vm.importProgress)
@@ -55,13 +52,10 @@ struct DeckManagerView: View {
                 Spacer()
                 // 词书从哪来——用户新装 App 时不知道 .apkg 去哪下载，
                 // 这里给明文入口（AnkiWeb 官方共享词库 + CSV 格式说明）。
-                Button {
+                DButton("去 AnkiWeb 找词书", rank: .quiet, icon: "safari",
+                        help: "打开 AnkiWeb 共享词库，下载 .apkg 后可在此导入") {
                     NSWorkspace.shared.open(Self.ankiWebURL)
-                } label: {
-                    Label("去 AnkiWeb 找词书", systemImage: "safari")
                 }
-                .buttonStyle(.borderless)
-                .help("打开 AnkiWeb 共享词库，下载 .apkg 后可在此导入")
             }
             .padding(.horizontal, Space.page)
             .padding(.vertical, Space.toolbarV)
@@ -89,14 +83,11 @@ struct DeckManagerView: View {
                                     deckRow(deck)
                                 }
                                 .buttonStyle(.plain)
-                                Button(role: .destructive) {
-                                    pendingDeletion = deck
-                                } label: {
-                                    Image(systemName: "trash")
-                                }
-                                .buttonStyle(.borderless)
-                                .foregroundStyle(.red)
-                                .help("删除该词库（卡片一并删除，词汇掌握度保留）")
+                                IconButton(
+                                    icon: "trash",
+                                    help: "删除该词库（卡片一并删除，词汇掌握度保留）",
+                                    tint: .red
+                                ) { pendingDeletion = deck }
                             }
                             .padding(.trailing, Space.xl)
                         }
@@ -171,13 +162,8 @@ struct DeckManagerView: View {
             .frame(maxWidth: 520, alignment: .leading)
 
             HStack(spacing: Space.m) {
-                Button {
-                    showFilePicker = true
-                } label: {
-                    Label("导入词库", systemImage: "square.and.arrow.down")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(vm.isImporting)
+                DButton("导入词库", rank: .primary, icon: "square.and.arrow.down",
+                        disabled: vm.isImporting) { showFilePicker = true }
             }
             .padding(.top, Space.xs)
         }
@@ -203,9 +189,7 @@ struct DeckManagerView: View {
                     .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if let actionLabel, let action {
-                    Button(actionLabel, action: action)
-                        .buttonStyle(.borderless)
-                        .font(Type.caption)
+                    DButton(actionLabel, rank: .quiet, action: action)
                 }
             }
             Spacer(minLength: 0)

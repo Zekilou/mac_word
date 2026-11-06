@@ -2,6 +2,8 @@ import SwiftUI
 import WordRecitingCore
 
 /// 添加自定义源表单（标题 + URL），用于 RSS 源管理页 sheet。
+/// @ai: 结构与样式全部走设计系统（`Section` / `DTextField` / `DButton` / `InlineError`），
+///      不自绘 padding 与按钮样式。
 struct AddSourceForm: View {
     let onAdd: (_ title: String, _ url: String) -> Bool
     @State private var title = ""
@@ -10,30 +12,35 @@ struct AddSourceForm: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("添加自定义 RSS 源").font(.headline)
-            TextField("标题（可选）", text: $title)
-                .textFieldStyle(.roundedBorder)
-            TextField("RSS 链接（https://...）", text: $url)
-                .textFieldStyle(.roundedBorder)
-            if let msg = errorMessage {
-                Text(msg).font(.callout).foregroundStyle(.red)
+        VStack(alignment: .leading, spacing: Space.section) {
+            Section(
+                title: "添加自定义 RSS 源",
+                note: "填入源地址，标题可留空（会自动取域名）"
+            ) {
+                VStack(spacing: Space.m) {
+                    DTextField(placeholder: "标题（可选）", text: $title)
+                    DTextField(placeholder: "RSS 链接（https://…）", text: $url,
+                               icon: "link", monospaced: true)
+                }
             }
-            HStack {
-                Spacer()
-                Button("取消") { dismiss() }
-                    .buttonStyle(.bordered)
-                Button("添加") {
+
+            if let msg = errorMessage {
+                InlineError(message: msg)
+            }
+
+            HStack(spacing: Space.s) {
+                Spacer(minLength: 0)
+                DButton("取消", rank: .quiet) { dismiss() }
+                DButton("添加", rank: .primary) {
                     if onAdd(title, url) {
                         dismiss()
                     } else {
                         errorMessage = "链接无效（需 http/https 且含域名）"
                     }
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
-        .padding(16)
-        .frame(width: 340)
+        .padding(Space.page)
+        .frame(width: Size.sheetNarrow)
     }
 }

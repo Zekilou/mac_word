@@ -124,31 +124,24 @@ struct SettingsView: View {
                         .pickerStyle(.menu)
                         .frame(width: Size.fieldLabel)
                         .help("模型类型：思考型把计划并入初始提示单次完成；配置变更时自动探测，可在此手动覆盖")
-                        Button("编辑") { editingConfig = config }
-                            .buttonStyle(.borderless)
-                            .controlSize(.small)
-                        Button {
+                        DButton("编辑", rank: .quiet) { editingConfig = config }
+                        IconButton(
+                            icon: "trash",
+                            help: "删除（至少保留一条）",
+                            disabled: vm.settings.apiConfigs.count <= 1,
+                            tint: .red
+                        ) {
                             vm.settings.removeAPIConfig(id: config.id)
-                        } label: {
-                            Image(systemName: "trash")
                         }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.red)
-                        .disabled(vm.settings.apiConfigs.count <= 1)
-                        .help("删除（至少保留一条）")
                     }
                     .padding(.vertical, Space.xxs)
                 }
-                Button {
+                DButton("添加 API 配置", rank: .secondary, icon: "plus") {
                     editingConfig = APIConfig(
                         id: UUID().uuidString, name: "新配置",
                         provider: .ollama, model: RemoteProvider.ollama.defaultModel,
                         baseURL: RemoteProvider.ollama.defaultBaseURL, apiKey: "")
-                } label: {
-                    Label("添加 API 配置", systemImage: "plus")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
         }
         .sheet(item: $editingConfig) { config in
@@ -275,10 +268,8 @@ struct SettingsView: View {
                     .textSelection(.enabled)
 
                 HStack(spacing: Space.m) {
-                    Button {
+                    DButton("选择 GGUF 文件", rank: .secondary, icon: "folder") {
                         showFileImporter = true
-                    } label: {
-                        Label("选择 GGUF 文件", systemImage: "folder")
                     }
                     .fileImporter(
                         isPresented: $showFileImporter,
@@ -289,13 +280,9 @@ struct SettingsView: View {
                             vm.importModel(from: url)
                         }
                     }
-                    Button {
+                    IconButton(icon: "arrow.clockwise", help: "刷新") {
                         vm.reload()
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
                     }
-                    .buttonStyle(.borderless)
-                    .help("刷新")
                     Spacer()
                     Text("下载新模型见下方「一键下载」")
                         .font(Type.micro).foregroundStyle(Ink.tertiary)
@@ -318,9 +305,7 @@ struct SettingsView: View {
         VStack(spacing: Space.xxs) {
             ForEach(vm.localModels) { model in
                 let isSelected = vm.settings.localModelPath == model.url.path
-                Button {
-                    vm.selectModel(model)
-                } label: {
+                ListRow(selected: isSelected, action: { vm.selectModel(model) }) {
                     HStack(spacing: Space.m) {
                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
@@ -332,13 +317,7 @@ struct SettingsView: View {
                         Text(model.sizeDescription)
                             .font(Type.caption).foregroundStyle(Ink.secondary)
                     }
-                    .padding(.vertical, Space.xs)
-                    .padding(.horizontal, Space.m)
-                    .background(isSelected ? Color.accentColor.opacity(0.15) : .clear)
-                    .clipShape(RoundedRectangle(cornerRadius: Radius.chip))
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
             }
             if let path = vm.settings.localModelPath, !vm.settings.localModelPathIsUsable {
                 HStack(alignment: .top, spacing: Space.s) {
@@ -371,11 +350,9 @@ struct SettingsView: View {
                             Text(ByteCountFormatter.string(
                                 fromByteCount: candidate.sizeBytes, countStyle: .file))
                                 .font(Type.caption).foregroundStyle(Ink.secondary)
-                            Button("提取为 GGUF") {
+                            DButton("提取为 GGUF", rank: .secondary) {
                                 vm.extractOllama(candidate)
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
                         }
                         .padding(.vertical, Space.xxs)
                     }
@@ -397,15 +374,14 @@ struct SettingsView: View {
                         .font(Type.caption)
                     HStack(spacing: Space.m) {
                         ForEach(entry.quants) { quant in
-                            Button {
+                            DButton(
+                                "\(quant.quant) \(String(format: "%.1f", quant.fileSizeGB))GB",
+                                rank: .secondary,
+                                help: quant.recommended ? "推荐档（\(quant.fileName)）" : quant.fileName,
+                                disabled: vm.downloadActivityID != nil
+                            ) {
                                 vm.downloadModel(entry, quant: quant)
-                            } label: {
-                                Text("\(quant.quant) \(String(format: "%.1f", quant.fileSizeGB))GB")
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            .disabled(vm.downloadActivityID != nil)
-                            .help(quant.recommended ? "推荐档（\(quant.fileName)）" : quant.fileName)
                         }
                         Spacer()
                     }
@@ -420,17 +396,11 @@ struct SettingsView: View {
                             .font(Type.caption)
                         Spacer()
                         if vm.downloadPaused {
-                            Button("继续") { vm.resumeDownload() }
-                                .buttonStyle(.borderless)
-                                .controlSize(.small)
+                            DButton("继续", rank: .quiet) { vm.resumeDownload() }
                         } else {
-                            Button("暂停") { vm.pauseDownload() }
-                                .buttonStyle(.borderless)
-                                .controlSize(.small)
+                            DButton("暂停", rank: .quiet) { vm.pauseDownload() }
                         }
-                        Button("取消") { vm.cancelDownload() }
-                            .buttonStyle(.borderless)
-                            .controlSize(.small)
+                        DButton("取消", rank: .quiet) { vm.cancelDownload() }
                     }
                     ProgressView(value: dl.progress ?? 0)
                         .progressViewStyle(.linear)
@@ -470,26 +440,19 @@ struct SettingsView: View {
                             Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                             Text("llama-server 已就绪").font(Type.caption)
                             Spacer()
-                            Button("检查更新") {
+                            DButton("检查更新", rank: .secondary) {
                                 Task { await vm.checkLatestLlamaServer() }
                             }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                            Button("重新下载") { vm.downloadLlamaServer() }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
+                            DButton("重新下载", rank: .secondary) { vm.downloadLlamaServer() }
                         }
                     } else {
                         HStack(spacing: Space.m) {
                             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                             Text("未下载 llama-server 二进制（内置版本 \(LlamaServerRelease.fallbackTag)）").font(Type.caption)
                             Spacer()
-                            Button {
+                            DButton("下载", rank: .primary, icon: "arrow.down.circle") {
                                 vm.downloadLlamaServer()
-                            } label: {
-                                Label("下载", systemImage: "arrow.down.circle")
                             }
-                            .buttonStyle(.borderedProminent)
                         }
                     }
 
@@ -520,14 +483,15 @@ struct SettingsView: View {
                         }
                         Spacer()
                         if vm.llamaServerIsRunning {
-                            Button("停止") { vm.stopLlamaServer() }
-                                .buttonStyle(.bordered)
+                            DButton("停止", rank: .secondary) { vm.stopLlamaServer() }
                         } else {
-                            Button("启动") {
+                            DButton(
+                                "启动",
+                                rank: .secondary,
+                                disabled: !vm.llamaServerBinaryReady || vm.settings.localModelPath == nil
+                            ) {
                                 Task { await vm.startLlamaServer() }
                             }
-                            .buttonStyle(.bordered)
-                            .disabled(!vm.llamaServerBinaryReady || vm.settings.localModelPath == nil)
                         }
                     }
                     .onChange(of: vm.settings.llamaServerLifecycle) { _, _ in
@@ -554,17 +518,14 @@ struct SettingsView: View {
     // MARK: - 复用
 
     private func section<Content: View>(
-        _ title: String, @ViewBuilder _ content: () -> Content
+        _ title: String, @ViewBuilder _ content: @escaping () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Text(title).font(Type.section)
-            content()
+        Card {
+            VStack(alignment: .leading, spacing: Space.m) {
+                Text(title).font(Type.section)
+                content()
+            }
         }
-        .padding(Space.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.card))
-        .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(.separator.opacity(0.5), lineWidth: 1))
     }
 }
 
@@ -621,17 +582,18 @@ struct APIConfigEditor: View {
                 .font(Type.micro).foregroundStyle(Ink.tertiary)
             HStack {
                 Spacer()
-                Button("取消") { dismiss() }
-                    .buttonStyle(.bordered)
-                Button("保存") {
+                DButton("取消", rank: .secondary) { dismiss() }
+                DButton(
+                    "保存",
+                    rank: .primary,
+                    disabled: name.trimmingCharacters(in: .whitespaces).isEmpty || model.isEmpty
+                ) {
                     onSave(APIConfig(
                         id: config.id, name: name.trimmingCharacters(in: .whitespaces),
                         provider: provider, model: model, baseURL: baseURL, apiKey: apiKey,
                         isThinking: config.isThinking))
                     dismiss()
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || model.isEmpty)
             }
         }
         .padding(Space.page)

@@ -92,9 +92,7 @@ struct HomeView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            Button(label) { onNavigate(section) }
-                .buttonStyle(.link)
-                .font(Type.caption)
+            DButton(label, rank: .quiet) { onNavigate(section) }
         }
     }
 
@@ -105,11 +103,7 @@ struct HomeView: View {
             Text("今天 · \(Date().formatted(.dateTime.year().month().day().weekday(.wide)))")
                 .font(Type.section)
             Spacer()
-            Button { vm.reload() } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .buttonStyle(.borderless)
-            .help("刷新")
+            IconButton(icon: "arrow.clockwise", help: "刷新") { vm.reload() }
         }
     }
 
@@ -218,14 +212,8 @@ struct HomeView: View {
     }
 
     private func actionButton(_ title: String, icon: String, section: AppSection) -> some View {
-        Button {
+        DButton(title, rank: .primary, icon: icon) {
             onNavigate(section)
-        } label: {
-            Label(title, systemImage: icon)
-                .font(Type.caption)
-                .padding(.horizontal, Space.rowH)
-                .padding(.vertical, Space.s)
         }
-        .buttonStyle(.borderedProminent)
     }
 }

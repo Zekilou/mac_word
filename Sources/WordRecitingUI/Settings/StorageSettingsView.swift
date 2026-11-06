@@ -55,13 +55,9 @@ struct StorageSettingsView: View {
                 infoRow("数据库位置", dataDirectory.path)
                 infoRow("数据库大小", sizeText(dbSize))
                 HStack(spacing: Space.m) {
-                    Button {
+                    DButton("打开数据目录", rank: .secondary, icon: "folder") {
                         openDataDirectory()
-                    } label: {
-                        Label("打开数据目录", systemImage: "folder")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                     Spacer()
                 }
             }
@@ -76,21 +72,14 @@ struct StorageSettingsView: View {
         section("备份与导出") {
             VStack(alignment: .leading, spacing: Space.m) {
                 HStack(spacing: Space.m) {
-                    Button {
+                    DButton("备份数据库…", rank: .secondary,
+                            icon: "externaldrive.badge.timemachine") {
                         backupDatabase()
-                    } label: {
-                        Label("备份数据库…", systemImage: "externaldrive.badge.timemachine")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
 
-                    Button {
+                    DButton("导出词汇 CSV…", rank: .secondary, icon: "tablecells") {
                         exportVocabulary()
-                    } label: {
-                        Label("导出词汇 CSV…", systemImage: "tablecells")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
                     Spacer()
                 }
                 Text("备份生成完整的 .sqlite 快照，可直接替换数据目录里的 db.sqlite 还原。"
@@ -125,12 +114,10 @@ struct StorageSettingsView: View {
                             .font(Type.micro).foregroundStyle(Ink.tertiary)
                     }
                     Spacer()
-                    Button("删除 \(unusedModelCount) 个") {
+                    DButton("删除 \(unusedModelCount) 个", rank: .secondary,
+                            disabled: unusedModelCount == 0) {
                         confirmDeleteModels = true
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(unusedModelCount == 0)
                 }
                 Rule()
                 HStack(spacing: Space.m) {
@@ -141,12 +128,10 @@ struct StorageSettingsView: View {
                             .font(Type.micro).foregroundStyle(Ink.tertiary)
                     }
                     Spacer()
-                    Button("清空 \(articleCount) 篇") {
+                    DButton("清空 \(articleCount) 篇", rank: .secondary,
+                            disabled: articleCount == 0) {
                         confirmClearHistory = true
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(articleCount == 0)
                 }
             }
         }
@@ -258,16 +243,13 @@ struct StorageSettingsView: View {
     // MARK: - 复用
 
     private func section<Content: View>(
-        _ title: String, @ViewBuilder _ content: () -> Content
+        _ title: String, @ViewBuilder _ content: @escaping () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Text(title).font(Type.section)
-            content()
+        Card {
+            VStack(alignment: .leading, spacing: Space.m) {
+                Text(title).font(Type.section)
+                content()
+            }
         }
-        .padding(Space.l)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .textBackgroundColor).opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.card))
-        .overlay(RoundedRectangle(cornerRadius: Radius.card).stroke(.separator.opacity(0.5), lineWidth: 1))
     }
 }

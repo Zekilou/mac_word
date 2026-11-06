@@ -132,18 +132,12 @@ extension GenerateView {
                 .textSelection(.enabled)
             Rule()
             HStack(spacing: Space.m) {
-                Button {
+                DButton("认识", rank: .secondary, icon: "checkmark.circle") {
                     markReading(token, .good)
-                } label: {
-                    Label("认识", systemImage: "checkmark.circle")
                 }
-                .buttonStyle(.bordered)
-                Button {
+                DButton("不认识", rank: .secondary, icon: "xmark.circle") {
                     markReading(token, .again)
-                } label: {
-                    Label("不认识", systemImage: "xmark.circle")
                 }
-                .buttonStyle(.bordered)
             }
         }
         .padding(Space.l)

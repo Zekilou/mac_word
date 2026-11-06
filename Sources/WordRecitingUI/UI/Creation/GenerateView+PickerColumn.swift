@@ -46,16 +46,15 @@ extension GenerateView {
                 TextField("", value: $vm.randomCount, format: .number)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: Size.colBand)
-                Button {
+                DButton(rank: .primary,
+                        icon: vm.wordScoringID == .random ? "dice" : "target",
+                        disabled: vm.selectedDeckId == nil || vm.deckCards.isEmpty) {
                     if vm.randomPick().isEmpty {
                         vm.errorMessage = "当前范围没有可选单词"
                     }
                 } label: {
-                    Label(vm.wordScoringID == .random ? "随机选词" : "按策略选词",
-                          systemImage: vm.wordScoringID == .random ? "dice" : "target")
+                    Text(vm.wordScoringID == .random ? "随机选词" : "按策略选词")
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(vm.selectedDeckId == nil || vm.deckCards.isEmpty)
             }
             Text("从「\(vm.wordFilter.label)」的词中按「\(label(for: vm.wordScoringID))」选 \(max(1, vm.randomCount)) 个作为目标词")
                 .font(Type.micro).foregroundStyle(Ink.tertiary)

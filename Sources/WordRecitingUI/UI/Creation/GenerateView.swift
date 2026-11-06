@@ -73,16 +73,14 @@ struct GenerateView: View {
                 Text("\(article.spans.count) 个目标词")
                     .font(Type.caption).foregroundStyle(Ink.secondary)
             }
-            Button { showPicker.toggle() } label: {
-                Image(systemName: "sidebar.left")
+            IconButton(icon: "sidebar.left",
+                       help: showPicker ? "收起选词器列" : "展开选词器列") {
+                showPicker.toggle()
             }
-            .buttonStyle(.borderless)
-            .help(showPicker ? "收起选词器列" : "展开选词器列")
-            Button { showHistory.toggle() } label: {
-                Image(systemName: "sidebar.right")
+            IconButton(icon: "sidebar.right",
+                       help: showHistory ? "收起生成历史" : "展开生成历史") {
+                showHistory.toggle()
             }
-            .buttonStyle(.borderless)
-            .help(showHistory ? "收起生成历史" : "展开生成历史")
         }) {
             VStack(alignment: .leading, spacing: Space.m) {
                 ScrollView {
@@ -166,16 +164,12 @@ struct GenerateView: View {
             HStack(spacing: Space.m) {
                 Text("生成历史").font(Type.section)
                 Spacer()
-                Button { vm.loadHistory() } label: {
-                    Image(systemName: "arrow.clockwise")
+                IconButton(icon: "arrow.clockwise", help: "刷新历史") {
+                    vm.loadHistory()
                 }
-                .buttonStyle(.borderless)
-                .help("刷新历史")
-                Button { showHistory = false } label: {
-                    Image(systemName: "chevron.compact.right")
+                IconButton(icon: "chevron.compact.right", help: "收起侧栏") {
+                    showHistory = false
                 }
-                .buttonStyle(.borderless)
-                .help("收起侧栏")
             }
             .padding(.horizontal, Space.page)
             .padding(.vertical, Space.toolbarV)
@@ -183,10 +177,7 @@ struct GenerateView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Space.xxs) {
                     ForEach(vm.history) { item in
-                        Button { vm.selectHistory(item.id) } label: {
-                            historyCard(item)
-                        }
-                        .buttonStyle(.plain)
+                        historyCard(item)
                     }
                 }
             }
@@ -200,21 +191,19 @@ struct GenerateView: View {
     }
 
     private func historyCard(_ item: ArticleHistoryItem) -> some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
-            Text(item.bodyPreview.isEmpty ? "(空)" : item.bodyPreview)
-                .font(Type.caption)
-                .lineLimit(3)
-                .foregroundStyle(.primary)
-            HStack {
-                Text(item.generatorId).font(Type.micro).foregroundStyle(Ink.secondary)
-                Spacer()
-                Text(item.createdAt, style: .date).font(Type.micro).foregroundStyle(Ink.tertiary)
+        ListRow(selected: vm.selectedArticle?.id == item.id, action: { vm.selectHistory(item.id) }) {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(item.bodyPreview.isEmpty ? "(空)" : item.bodyPreview)
+                    .font(Type.caption)
+                    .lineLimit(3)
+                    .foregroundStyle(.primary)
+                HStack {
+                    Text(item.generatorId).font(Type.micro).foregroundStyle(Ink.secondary)
+                    Spacer()
+                    Text(item.createdAt, style: .date).font(Type.micro).foregroundStyle(Ink.tertiary)
+                }
             }
         }
-        .padding(Space.m)
-        .background(vm.selectedArticle?.id == item.id ? Color.accentColor.opacity(0.12) : .clear)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.chip))
-        .contentShape(Rectangle())
     }
 }
 

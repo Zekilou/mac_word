@@ -90,12 +90,10 @@ struct SynonymManagerView: View {
                 .padding(.top, Space.xs)
             }
 
-            Button(action: { vm.addMapping() }) {
-                Label("添加映射", systemImage: "plus.circle.fill")
-                    .frame(maxWidth: .infinity)
+            DButton("添加映射", rank: .primary, icon: "plus.circle.fill",
+                    fullWidth: true, disabled: !vm.canAdd()) {
+                vm.addMapping()
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(!vm.canAdd())
 
             Spacer(minLength: 0)
         }
@@ -157,11 +155,7 @@ struct SynonymManagerView: View {
             HStack {
                 Text("已定义同义词（\(vm.mappings.count)）").font(Type.caption).fontWeight(.medium)
                 Spacer()
-                Button(action: { vm.reload() }) {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(.borderless)
-                .help("刷新")
+                IconButton(icon: "arrow.clockwise", help: "刷新") { vm.reload() }
             }
             .padding(.horizontal, Space.page)
             .padding(.vertical, Space.toolbarV)
@@ -169,16 +163,10 @@ struct SynonymManagerView: View {
             Rule()
 
             if vm.mappings.isEmpty {
-                VStack(spacing: Space.l) {
-                    Image(systemName: "arrow.left.arrow.right")
-                        .font(IconSize.hero)
-                        .foregroundStyle(Ink.tertiary)
-                    Text("尚未定义同义词映射").foregroundStyle(Ink.secondary)
-                    Text("在左侧选择源词和同义词，点击「添加映射」开始")
-                        .font(Type.caption)
-                        .foregroundStyle(Ink.tertiary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                EmptyState(
+                    icon: "arrow.left.arrow.right",
+                    title: "尚未定义同义词映射",
+                    message: "在左侧选择源词和同义词，点击「添加映射」开始")
             } else {
                 // @ai: 不用 List（NSTableView），避免 macOS 27 FocusBridge 布局时 key view loop 崩溃
                 ScrollView {
@@ -195,12 +183,7 @@ struct SynonymManagerView: View {
     private func mappingRow(_ m: SynonymMapping, vm: SynonymManagerViewModel) -> some View {
         HStack(spacing: Space.l) {
             // 删除按钮（重要操作在第一列）
-            Button(action: { vm.remove(mapping: m) }) {
-                Image(systemName: "trash")
-                    .foregroundStyle(.red)
-            }
-            .buttonStyle(.borderless)
-            .help("删除此映射")
+            IconButton(icon: "trash", help: "删除此映射", tint: .red) { vm.remove(mapping: m) }
 
             VStack(alignment: .leading, spacing: Space.xxs) {
                 HStack(spacing: Space.m) {

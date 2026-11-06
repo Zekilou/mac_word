@@ -24,11 +24,7 @@ struct AnalyticsView: View {
         HStack {
             Text("学习数据").font(Type.section)
             Spacer()
-            Button { vm.reload() } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .buttonStyle(.borderless)
-            .help("刷新")
+            IconButton(icon: "arrow.clockwise", help: "刷新") { vm.reload() }
         }
         .padding(.horizontal, Space.toolbarH)
         .padding(.vertical, Space.toolbarV)

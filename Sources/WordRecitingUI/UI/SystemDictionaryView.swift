@@ -37,13 +37,10 @@ struct SystemDictionaryView: View {
                 .textFieldStyle(.roundedBorder)
                 .focused($searchFocused)
                 .onSubmit { Task { await vm.search(query) } }
-            Button {
+            DButton("查询", rank: .primary, icon: "magnifyingglass",
+                    disabled: query.trimmingCharacters(in: .whitespaces).isEmpty) {
                 Task { await vm.search(query) }
-            } label: {
-                Image(systemName: "magnifyingglass")
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty)
         }
         .padding(.horizontal, Space.page)
         .padding(.vertical, Space.toolbarV)
@@ -68,15 +65,7 @@ struct SystemDictionaryView: View {
     }
 
     private func emptyHint(_ text: String) -> some View {
-        VStack(spacing: Space.m) {
-            Image(systemName: "character.book.closed")
-                .font(IconSize.empty)
-                .foregroundStyle(Ink.tertiary)
-            Text(text)
-                .font(Type.caption)
-                .foregroundStyle(Ink.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyState(icon: "character.book.closed", title: text)
     }
 
     private func entryCard(_ entry: DictionaryEntry, vm: SystemDictionaryViewModel) -> some View {
@@ -102,14 +91,13 @@ struct SystemDictionaryView: View {
                         }
                     }
                     Spacer()
-                    Button {
+                    DButton(
+                        vm.wordState == .known ? "已会 ✓" : "标为会",
+                        rank: .secondary,
+                        help: "当前档位：\(vm.wordState.label)（概率优先判定）。点击切换 会/不会（写入全局掌握度）"
+                    ) {
                         vm.toggleMark(entry.word)
-                    } label: {
-                        Text(vm.wordState == .known ? "已会 ✓" : "标为会")
                     }
-                    .buttonStyle(.bordered)
-                    .tint(vm.wordState.color)
-                    .help("当前档位：\(vm.wordState.label)（概率优先判定）。点击切换 会/不会（写入全局掌握度）")
                 }
                 // 释义全文
                 Text(entry.definition)

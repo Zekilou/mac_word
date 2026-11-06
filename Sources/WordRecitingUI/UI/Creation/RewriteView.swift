@@ -42,11 +42,9 @@ struct RewriteView: View {
             HStack(spacing: Space.m) {
                 Text("输入设置").font(Type.section)
                 Spacer()
-                Button { showInput = false } label: {
-                    Image(systemName: "chevron.compact.left")
+                IconButton(icon: "chevron.compact.left", help: "收起侧栏") {
+                    showInput = false
                 }
-                .buttonStyle(.borderless)
-                .help("收起侧栏")
             }
             .padding(.horizontal, Space.page)
             .padding(.vertical, Space.toolbarV)
@@ -65,16 +63,12 @@ struct RewriteView: View {
             HStack(spacing: Space.m) {
                 Text("生成历史").font(Type.section)
                 Spacer()
-                Button { vm.loadHistory() } label: {
-                    Image(systemName: "arrow.clockwise")
+                IconButton(icon: "arrow.clockwise", help: "刷新历史") {
+                    vm.loadHistory()
                 }
-                .buttonStyle(.borderless)
-                .help("刷新历史")
-                Button { showHistory = false } label: {
-                    Image(systemName: "chevron.compact.right")
+                IconButton(icon: "chevron.compact.right", help: "收起侧栏") {
+                    showHistory = false
                 }
-                .buttonStyle(.borderless)
-                .help("收起侧栏")
             }
             .padding(.horizontal, Space.page)
             .padding(.vertical, Space.toolbarV)
@@ -82,10 +76,7 @@ struct RewriteView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Space.xxs) {
                     ForEach(vm.history) { item in
-                        Button { vm.selectHistory(item.id) } label: {
-                            historyCard(item)
-                        }
-                        .buttonStyle(.plain)
+                        historyCard(item)
                     }
                 }
             }
@@ -110,13 +101,10 @@ struct RewriteView: View {
                 editor(text: $vm.targetsText, minHeight: 70)
             }
             HStack(spacing: Space.m) {
-                Button {
+                DButton("AI 改写", rank: .primary, icon: "bolt.fill",
+                        disabled: vm.isGenerating) {
                     Task { await vm.runRewrite() }
-                } label: {
-                    Label("AI 改写", systemImage: "bolt.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(vm.isGenerating)
                 if vm.isGenerating { ProgressView().scaleEffect(0.7) }
                 if let stage = vm.genStage {
                     Text(stage.label).font(Type.caption).foregroundStyle(Ink.secondary)
@@ -194,22 +182,20 @@ struct RewriteView: View {
     private var outputPane: some View {
         VStack(alignment: .leading, spacing: Space.m) {
             HStack {
-                Button { showInput.toggle() } label: {
-                    Image(systemName: "sidebar.left")
+                IconButton(icon: "sidebar.left",
+                           help: showInput ? "收起输入面板" : "展开输入面板") {
+                    showInput.toggle()
                 }
-                .buttonStyle(.borderless)
-                .help(showInput ? "收起输入面板" : "展开输入面板")
                 Text("改写结果").font(Type.section)
                 Spacer()
                 if let article = vm.resultArticle, !article.spans.isEmpty {
                     Text("\(article.spans.count) 处替换")
                         .font(Type.caption).foregroundStyle(Ink.secondary)
                 }
-                Button { showHistory.toggle() } label: {
-                    Image(systemName: "sidebar.right")
+                IconButton(icon: "sidebar.right",
+                           help: showHistory ? "收起生成历史" : "展开生成历史") {
+                    showHistory.toggle()
                 }
-                .buttonStyle(.borderless)
-                .help(showHistory ? "收起生成历史" : "展开生成历史")
             }
             ScrollView {
                 if let article = vm.resultArticle {
@@ -255,21 +241,19 @@ struct RewriteView: View {
     // MARK: - 右：历史
 
     private func historyCard(_ item: ArticleHistoryItem) -> some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
-            Text(item.bodyPreview.isEmpty ? "(空)" : item.bodyPreview)
-                .font(Type.caption)
-                .lineLimit(3)
-                .foregroundStyle(.primary)
-            HStack {
-                Text(item.generatorId).font(Type.micro).foregroundStyle(Ink.secondary)
-                Spacer()
-                Text(item.createdAt, style: .date).font(Type.micro).foregroundStyle(Ink.tertiary)
+        ListRow(selected: vm.selectedArticle?.id == item.id, action: { vm.selectHistory(item.id) }) {
+            VStack(alignment: .leading, spacing: Space.xs) {
+                Text(item.bodyPreview.isEmpty ? "(空)" : item.bodyPreview)
+                    .font(Type.caption)
+                    .lineLimit(3)
+                    .foregroundStyle(.primary)
+                HStack {
+                    Text(item.generatorId).font(Type.micro).foregroundStyle(Ink.secondary)
+                    Spacer()
+                    Text(item.createdAt, style: .date).font(Type.micro).foregroundStyle(Ink.tertiary)
+                }
             }
         }
-        .padding(Space.m)
-        .background(vm.selectedArticle?.id == item.id ? Color.accentColor.opacity(0.12) : .clear)
-        .clipShape(RoundedRectangle(cornerRadius: Radius.chip))
-        .contentShape(Rectangle())
     }
 
     // MARK: - 复用组件

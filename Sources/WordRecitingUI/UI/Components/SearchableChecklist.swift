@@ -23,22 +23,25 @@ struct SearchableChecklist<Item: Identifiable>: View {
             TextField(placeholder, text: $searchText)
                 .textFieldStyle(.roundedBorder)
                 .controlSize(.large)
-            ScrollView(.vertical, showsIndicators: true) {
-                LazyVStack(spacing: 0) {
-                    ForEach(filtered) { item in
-                        row(item)
+            Panel(padding: 0) {
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVStack(spacing: 0) {
+                        ForEach(filtered) { item in
+                            row(item)
+                        }
+                    }
+                }
+                .frame(maxHeight: .infinity)   // 弹性撑满剩余高度，随窗口伸缩
+                .overlay {
+                    if filtered.isEmpty {
+                        Text("无匹配结果")
+                            .font(Type.caption).foregroundStyle(Ink.tertiary)
                     }
                 }
             }
-            .frame(maxHeight: .infinity)   // 弹性撑满剩余高度，随窗口伸缩
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.4))
-            .clipShape(RoundedRectangle(cornerRadius: Radius.chip))
-            .overlay {
-                if filtered.isEmpty {
-                    Text("无匹配结果")
-                        .font(Type.caption).foregroundStyle(Ink.tertiary)
-                }
-            }
+            // 保留原有的裁切行为（原实现为 clipShape(RoundedRectangle(cornerRadius: .chip))）：
+            // 行 hover 底色不应溢出面板圆角。
+            .clipShape(.rect(cornerRadius: Radius.control))
         }
     }
 
@@ -50,9 +53,7 @@ struct SearchableChecklist<Item: Identifiable>: View {
     }
 
     private func row(_ item: Item) -> some View {
-        Button {
-            toggle(item)
-        } label: {
+        ListRow(selected: false, action: { toggle(item) }) {
             HStack(spacing: Space.m) {
                 Image(systemName: isSelected(item) ? "checkmark.square.fill" : "square")
                     .foregroundStyle(isSelected(item) ? Color.accentColor : Color.secondary)
@@ -76,10 +77,6 @@ struct SearchableChecklist<Item: Identifiable>: View {
                         .clipShape(Capsule())
                 }
             }
-            .padding(.vertical, Space.s)
-            .padding(.horizontal, Space.m)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
     }
 }
