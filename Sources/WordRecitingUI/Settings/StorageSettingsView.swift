@@ -230,7 +230,7 @@ struct StorageSettingsView: View {
             Text(name).font(Type.caption).foregroundStyle(Ink.secondary)
             Text(value)
                 .font(Type.caption)
-                .foregroundStyle(.primary)
+                .foregroundStyle(Ink.primary)
                 .textSelection(.enabled)
                 .lineLimit(2)
         }

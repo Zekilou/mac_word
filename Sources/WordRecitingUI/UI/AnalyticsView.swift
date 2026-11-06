@@ -11,46 +11,32 @@ struct AnalyticsView: View {
         _vm = State(initialValue: AnalyticsViewModel(world: world))
     }
 
+    /// @ai: 原来这里自己拼「header + Rule + ScrollView + .padding(Space.page)」，
+    ///      header 的边距是 Space.toolbarH / toolbarV 的手写副本。
+    ///      现在交给 `PageScaffold`：标题行进 `toolbar`，主体进 `content`，
+    ///      滚动与页面级边距由骨架统一提供（不再有第二套页面 padding）。
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Rule()
-            content
-        }
-        .onAppear { vm.reload() }
-    }
-
-    private var header: some View {
-        HStack {
+        PageScaffold {
             Text("学习数据").font(Type.section)
             Spacer()
             IconButton(icon: "arrow.clockwise", help: "刷新") { vm.reload() }
-        }
-        .padding(.horizontal, Space.toolbarH)
-        .padding(.vertical, Space.toolbarV)
-    }
-
-    private var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Space.section) {
-                if let err = vm.errorMessage {
-                    InlineError(message: err)
-                }
-                abilitySection
-                Rule()
-                profileSection
-                Rule()
-                memoryQualitySection
-                Rule()
-                behaviorSection
-                Rule()
-                forecastSection
-                Rule()
-                reviewSection
+        } content: {
+            if let err = vm.errorMessage {
+                InlineError(message: err)
             }
-            .padding(Space.page)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            abilitySection
+            Rule()
+            profileSection
+            Rule()
+            memoryQualitySection
+            Rule()
+            behaviorSection
+            Rule()
+            forecastSection
+            Rule()
+            reviewSection
         }
+        .onAppear { vm.reload() }
     }
 
     // MARK: - 掌握度分布（BKT 后验概率档位）
@@ -187,7 +173,7 @@ struct AnalyticsView: View {
                     }
                     .frame(height: 8)
                     Text(band.coverage.map { String(format: "%.0f%%", $0 * 100) } ?? "—")
-                        .font(.caption2.weight(.semibold)).monospacedDigit()
+                        .font(Type.microEmphasis).monospacedDigit()
                         .foregroundStyle(Ink.secondary)
                         .frame(width: Size.colPercent, alignment: .trailing)
                     Text("已观测 \(band.observedFamilies)/\(band.totalFamilies)")
@@ -201,7 +187,7 @@ struct AnalyticsView: View {
     private func coverageHint(_ p: VocabularyProfile) -> some View {
         let known = p.estimatedKnownTotal
         return VStack(alignment: .leading, spacing: Space.xs) {
-            Text("覆盖阈值参照（书面文本）").font(.caption.weight(.semibold))
+            Text("覆盖阈值参照（书面文本）").font(Type.captionEmphasis)
             Text("95% 阅读覆盖 ≈ \(Self.coverage95Families) 词族 · 98% ≈ \(Self.coverage98Families) 词族")
                 .font(Type.micro).foregroundStyle(Ink.secondary)
             Text(known >= Double(Self.coverage98Families)
@@ -287,7 +273,7 @@ struct AnalyticsView: View {
                         }
                         .frame(height: 8)
                         Text("\(slice.count)")
-                            .font(.caption2.weight(.semibold)).monospacedDigit()
+                            .font(Type.microEmphasis).monospacedDigit()
                             .frame(width: Size.colNarrow, alignment: .trailing)
                     }
                 }

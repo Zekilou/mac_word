@@ -53,7 +53,7 @@ struct SearchableChecklist<Item: Identifiable>: View {
     }
 
     private func row(_ item: Item) -> some View {
-        ListRow(selected: false, action: { toggle(item) }) {
+        ListRow(action: { toggle(item) }) {
             HStack(spacing: Space.m) {
                 Image(systemName: isSelected(item) ? "checkmark.square.fill" : "square")
                     .foregroundStyle(isSelected(item) ? Color.accentColor : Color.secondary)
@@ -69,7 +69,7 @@ struct SearchableChecklist<Item: Identifiable>: View {
                 Spacer()
                 if let badge = badge?(item) {
                     Text(badge.text)
-                        .font(.caption2.weight(.semibold))
+                        .font(Type.microEmphasis)
                         .foregroundStyle(badge.color)
                         .padding(.horizontal, Space.xs)
                         .padding(.vertical, Space.xxs)

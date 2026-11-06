@@ -44,11 +44,22 @@ struct CardBrowserView: View {
     private func content(_ vm: CardBrowserViewModel) -> some View {
         // @ai: 禁用 HSplitView（macOS 27 beta 拖分栏会触发 FocusBridge key-view-loop 崩溃，
         //      见 docs/superpowers/specs/2026-08-11-ui-redesign-design.md「禁用 List 与 HSplitView 拖拽」）。
-        //      改用固定左栏 + Divider + 弹性右栏，与 ReadingView 同款两栏布局。
-        HStack(spacing: 0) {
-            listPane(vm).frame(width: Size.sidebarWide)
-            Rule()
-            detailPane(vm).frame(maxWidth: .infinity, maxHeight: .infinity)
+        //      分栏走 `PageScaffold(scrolls: false)` + `SplitPane`（固定左栏 + 分隔线 + 弹性右栏），
+        //      与 SynonymManagerView / ReadingView 同一套写法：骨架只给顶部工具条，
+        //      **不**包滚动、**不**加内容区边距，各栏自己滚、自己处理边缘留白。
+        PageScaffold(scrolls: false) {
+            // 标题行：词库名 + 卡片数（原来只有窗口标题，页面内没有归属标识）。
+            Text(deckName).font(Type.section)
+            Text("\(vm.cards.count) 张卡片")
+                .font(Type.caption)
+                .foregroundStyle(Ink.secondary)
+            Spacer()
+        } content: {
+            SplitPane(leadingWidth: Size.sidebarWide) {
+                listPane(vm)
+            } trailing: {
+                detailPane(vm)
+            }
         }
         .navigationTitle(deckName)
     }
@@ -140,7 +151,7 @@ struct CardBrowserView: View {
         } else if let card = vm.selected {
             VStack {
                 Spacer()
-                Text(card.plainText).font(.title).foregroundStyle(Ink.secondary)
+                Text(card.plainText).font(Type.title).foregroundStyle(Ink.secondary)
                 Spacer()
             }
         } else {
@@ -157,7 +168,7 @@ struct CardBrowserView: View {
             VStack(alignment: .leading, spacing: Space.xl) {
                 // 词面
                 HStack(alignment: .firstTextBaseline, spacing: Space.m) {
-                    Text(detail.text).font(.title).fontWeight(.semibold)
+                    Text(detail.text).font(Type.title)
                     if let pos = detail.pos, !pos.isEmpty {
                         Text(pos).font(Type.caption).foregroundStyle(Ink.secondary)
                             .padding(.horizontal, Space.s).padding(.vertical, Space.xxs)
@@ -177,7 +188,7 @@ struct CardBrowserView: View {
                     }
                 }
                 if let def = detail.definition, !def.isEmpty {
-                    Text(def).font(Type.body).foregroundStyle(.primary)
+                    Text(def).font(Type.body).foregroundStyle(Ink.primary)
                 }
                 Rule()
 
@@ -205,7 +216,7 @@ struct CardBrowserView: View {
                             Text(hit.preview)
                                 .font(Type.caption)
                                 .lineLimit(2)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(Ink.primary)
                             Text(hit.createdAt, style: .date)
                                 .font(Type.micro).foregroundStyle(Ink.tertiary)
                         }

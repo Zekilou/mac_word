@@ -20,17 +20,23 @@ struct SynonymManagerView: View {
         }
     }
 
+    /// @ai: 左右分栏页 → `PageScaffold(scrolls: false)`：骨架只给顶部工具条，
+    ///      **不**包滚动、**不**加内容区边距，各栏自己滚、自己处理边缘留白。
+    ///      分栏本身走 `SplitPane`（禁用 HSplitView 的等价安全写法），不再手写
+    ///      「HStack + 固定宽 + Rule + 弹性宽」。
     private func content(vm: SynonymManagerViewModel) -> some View {
-        // @ai: 禁用 HSplitView（macOS 27 beta 拖分栏崩溃，见 ui-redesign-design.md）。
-        //      固定宽左面板 + Divider + 弹性右列表（与 ReadingView 一致）。
-        HStack(spacing: 0) {
-            // 左：添加面板
-            addPanel(vm: vm)
-                .frame(width: Size.sidebarPanel)
-            Rule()
-            // 右：映射列表
-            mappingList(vm: vm)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        PageScaffold(scrolls: false) {
+            Text("已定义同义词（\(vm.mappings.count)）").font(Type.section)
+            Spacer(minLength: Space.m)
+            IconButton(icon: "arrow.clockwise", help: "刷新") { vm.reload() }
+        } content: {
+            SplitPane(leadingWidth: Size.sidebarPanel) {
+                // 左：添加面板
+                addPanel(vm: vm)
+            } trailing: {
+                // 右：映射列表
+                mappingList(vm: vm)
+            }
         }
     }
 
@@ -124,7 +130,7 @@ struct SynonymManagerView: View {
                             emptyWhenSelected()
                         }) {
                             VStack(alignment: .leading, spacing: Space.xxs) {
-                                Text(cand.text).fontWeight(.medium)
+                                Text(cand.text).font(Type.bodyMedium)
                                 if let def = cand.definition, !def.isEmpty {
                                     Text(def).font(Type.micro).foregroundStyle(Ink.secondary)
                                         .lineLimit(2)
@@ -150,18 +156,11 @@ struct SynonymManagerView: View {
 
     // MARK: - 右面板：映射列表
 
+    /// 右栏：映射列表。
+    /// @ai: 栏头（标题 + 刷新）已上移到页面骨架的工具条，这里只留列表本体，
+    ///      左边缘与工具条标题对齐（Space.page）；滚动仍由本栏自己提供。
     private func mappingList(vm: SynonymManagerViewModel) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("已定义同义词（\(vm.mappings.count)）").font(Type.caption).fontWeight(.medium)
-                Spacer()
-                IconButton(icon: "arrow.clockwise", help: "刷新") { vm.reload() }
-            }
-            .padding(.horizontal, Space.page)
-            .padding(.vertical, Space.toolbarV)
-
-            Rule()
-
+        Group {
             if vm.mappings.isEmpty {
                 EmptyState(
                     icon: "arrow.left.arrow.right",
@@ -175,9 +174,13 @@ struct SynonymManagerView: View {
                             mappingRow(m, vm: vm)
                         }
                     }
+                    .padding(.horizontal, Space.page)
+                    .padding(.vertical, Space.m)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func mappingRow(_ m: SynonymMapping, vm: SynonymManagerViewModel) -> some View {

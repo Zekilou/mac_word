@@ -12,7 +12,7 @@ extension GenerateView {
                 HStack(spacing: Space.s) {
                     Text("目标词覆盖").font(Type.caption).foregroundStyle(Ink.secondary)
                     Text("\(vm.coverage.filter(\.hit).count)/\(vm.coverage.count)")
-                        .font(.caption.weight(.semibold))
+                        .font(Type.captionEmphasis)
                         .foregroundStyle(vm.coverage.allSatisfy(\.hit) ? .green : .orange)
                 }
                 // 词多时折叠（默认显示前 24 个 + 「更多」），避免上百目标词把列4撑爆
@@ -71,7 +71,7 @@ extension GenerateView {
     private func strategyChip(_ name: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: Space.xxs) {
             Text(name).font(Type.micro).foregroundStyle(Ink.tertiary)
-            Text(value).font(.caption.weight(.medium))
+            Text(value).font(Type.captionMedium)
         }
         .padding(.horizontal, Space.m).padding(.vertical, Space.xs)
         .background(Color.accentColor.opacity(0.08))

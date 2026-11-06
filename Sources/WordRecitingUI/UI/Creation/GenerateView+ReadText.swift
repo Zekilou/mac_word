@@ -74,7 +74,7 @@ extension GenerateView {
             tappedToken = token
         } label: {
             Text(token.surface)
-                .font(.body.weight(.semibold))
+                .font(Type.bodyEmphasis)
                 .foregroundStyle(.orange)
                 .padding(.horizontal, Space.xxs)
                 .background(
@@ -125,7 +125,7 @@ extension GenerateView {
     func readingPopover(_ token: ArticleWordToken) -> some View {
         let definition = vm.cardForReading(token.lemmaId ?? "")?.definition
         return VStack(alignment: .leading, spacing: Space.l) {
-            Text(token.surface).font(.title3.weight(.semibold))
+            Text(token.surface).font(Type.titleLarge)
             Text(definition ?? "词库中暂无释义")
                 .font(Type.body)
                 .foregroundStyle(Ink.secondary)

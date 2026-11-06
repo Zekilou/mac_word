@@ -270,11 +270,11 @@ struct PlaceholderPage: View {
     var body: some View {
         VStack(spacing: Space.m) {
             Image(systemName: "hammer")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
+                .font(IconSize.hero)
+                .foregroundStyle(Ink.tertiary)
             Text("\(title)（待实现）")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(Type.body)
+                .foregroundStyle(Ink.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

@@ -126,7 +126,7 @@ struct GeneralSettingsView: View {
             Text(title).font(Type.caption)
             Stepper(value: value, in: range, step: step) {
                 Text("\(value.wrappedValue)")
-                    .font(.body.monospacedDigit())
+                    .font(Type.monoBodyRegular)
                     .frame(width: Size.colCount, alignment: .trailing)
             }
             .labelsHidden()

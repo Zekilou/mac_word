@@ -74,11 +74,24 @@ struct Section<Content: View>: View {
 
 // MARK: 页面骨架
 
-/// 页面骨架：顶部工具条（`.bar` 材质）+ 弹性内容区。
-/// @ai: 这条 `.padding(.horizontal,16).padding(.vertical,10).background(.bar)`
-///      在 8 个页面逐字重复。这里收成一处，以后调工具条高度只改这里。
+/// 页面骨架：顶部工具条（`Surface.toolbar` 底）+ 弹性内容区，**并统一内容区边距**。
+///
+/// @ai: 工具条那套 `.padding(.horizontal).padding(.vertical).background(.bar)` 在 8 个
+///      页面逐字重复，这里收成一处。
+///
+///      内容区边距也必须由这里给：以前各页自己写 `.padding(Space.page)` /
+///      `Space.xxl` / `Space.section` / `Space.m` 四种不同值，同一层级的留白对不上，
+///      这是「各种边距」的直接来源。现在默认 `Space.page` + 区块间距 `Space.section`；
+///      **只有真正需要通栏的内容**（贴边列表、满宽图表）才传 `contentPadding: 0`
+///      并在内部自行处理——不要为了局部对齐而在页面里再叠一层 padding。
 struct PageScaffold<Toolbar: View, Content: View>: View {
     var toolbarLeading: CGFloat = Space.toolbarH
+    /// 内容区统一边距（四边）。通栏内容传 0。
+    var contentPadding: CGFloat = Space.page
+    /// 内容区自上而下的区块间距。
+    var contentSpacing: CGFloat = Space.section
+    /// 是否由骨架提供滚动。分栏页（左列表 + 右详情）传 false，各栏自己滚。
+    var scrolls: Bool = true
     @ViewBuilder let toolbar: () -> Toolbar
     @ViewBuilder let content: () -> Content
 
@@ -92,15 +105,31 @@ struct PageScaffold<Toolbar: View, Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Surface.toolbar)
             Rule()
-            content()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if scrolls {
+                ScrollView {
+                    body(padded: true)
+                }
+            } else {
+                body(padded: false)
+            }
         }
+    }
+
+    @ViewBuilder
+    private func body(padded: Bool) -> some View {
+        VStack(alignment: .leading, spacing: contentSpacing) {
+            content()
+        }
+        .padding(padded ? contentPadding : 0)
+        .frame(maxWidth: .infinity, maxHeight: scrolls ? nil : .infinity,
+               alignment: .topLeading)
     }
 }
 
 /// 无工具条的页面骨架（内容直接铺满）。
 struct PageBody<Content: View>: View {
     var padding: CGFloat = Space.page
+    var spacing: CGFloat = Space.section
     var scrolls: Bool = true
     @ViewBuilder let content: () -> Content
 
@@ -108,14 +137,14 @@ struct PageBody<Content: View>: View {
         Group {
             if scrolls {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: Space.section) {
+                    VStack(alignment: .leading, spacing: spacing) {
                         content()
                     }
                     .padding(padding)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } else {
-                VStack(alignment: .leading, spacing: Space.section) {
+                VStack(alignment: .leading, spacing: spacing) {
                     content()
                 }
                 .padding(padding)

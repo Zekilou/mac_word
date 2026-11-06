@@ -38,58 +38,57 @@ struct DeckManagerView: View {
     }
 
     private func deckList(_ vm: DeckManagerViewModel) -> some View {
-        VStack(spacing: 0) {
+        // @ai: 页面骨架接管工具条底、工具条内边距与内容区边距（`Space.page`）；
+        //      页面不再自己写顶层 `VStack(spacing: 0)` + `.padding(...)` + `Rule()`。
+        //      骨架本身不滚动（`scrolls: false`），因为「空态要占满视口居中」和
+        //      「有词库时列表要滚动」是两种诉求，交给各自的 `PageBody` 决定。
+        PageScaffold(contentPadding: 0, scrolls: false) {
             // 工具栏：导入按钮
-            HStack {
-                DButton("导入词库", rank: .primary, icon: "square.and.arrow.down",
-                        disabled: vm.isImporting) { showFilePicker = true }
+            DButton("导入词库", rank: .primary, icon: "square.and.arrow.down",
+                    disabled: vm.isImporting) { showFilePicker = true }
 
-                if vm.isImporting {
-                    ProgressView(value: vm.importProgress)
-                        .frame(width: Size.meterShort)
-                    Text("导入中…").font(Type.caption).foregroundStyle(Ink.secondary)
+            if vm.isImporting {
+                ProgressView(value: vm.importProgress)
+                    .frame(width: Size.meterShort)
+                Text("导入中…").font(Type.caption).foregroundStyle(Ink.secondary)
+            }
+            Spacer()
+            // 词书从哪来——用户新装 App 时不知道 .apkg 去哪下载，
+            // 这里给明文入口（AnkiWeb 官方共享词库 + CSV 格式说明）。
+            DButton("去 AnkiWeb 找词书", rank: .quiet, icon: "safari",
+                    help: "打开 AnkiWeb 共享词库，下载 .apkg 后可在此导入") {
+                NSWorkspace.shared.open(Self.ankiWebURL)
+            }
+        } content: {
+            VStack(spacing: 0) {
+                // 消息区：通栏提示条（保持贴边，不随页面边距内缩）。
+                if let err = vm.errorMessage {
+                    banner(text: err, color: .red)
                 }
-                Spacer()
-                // 词书从哪来——用户新装 App 时不知道 .apkg 去哪下载，
-                // 这里给明文入口（AnkiWeb 官方共享词库 + CSV 格式说明）。
-                DButton("去 AnkiWeb 找词书", rank: .quiet, icon: "safari",
-                        help: "打开 AnkiWeb 共享词库，下载 .apkg 后可在此导入") {
-                    NSWorkspace.shared.open(Self.ankiWebURL)
+                if let summary = vm.lastImportSummary {
+                    banner(text: summary, color: .green)
                 }
-            }
-            .padding(.horizontal, Space.page)
-            .padding(.vertical, Space.toolbarV)
 
-            // 消息区
-            if let err = vm.errorMessage {
-                banner(text: err, color: .red)
-            }
-            if let summary = vm.lastImportSummary {
-                banner(text: summary, color: .green)
-            }
-
-            Rule()
-
-            // Deck 列表
-            if vm.decks.isEmpty {
-                emptyState(vm)
-            } else {
-                // @ai: 不用 List（NSTableView），避免 macOS 27 FocusBridge 布局时 key view loop 崩溃
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(vm.decks) { deck in
-                            HStack(spacing: Space.m) {
-                                NavigationLink(value: deck) {
-                                    deckRow(deck)
+                // Deck 列表
+                if vm.decks.isEmpty {
+                    PageBody(scrolls: false) { emptyState(vm) }
+                } else {
+                    // @ai: 不用 List（NSTableView），避免 macOS 27 FocusBridge 布局时 key view loop 崩溃
+                    PageBody {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(vm.decks) { deck in
+                                HStack(spacing: Space.m) {
+                                    NavigationLink(value: deck) {
+                                        deckRow(deck)
+                                    }
+                                    .buttonStyle(.plain)
+                                    IconButton(
+                                        icon: "trash",
+                                        help: "删除该词库（卡片一并删除，词汇掌握度保留）",
+                                        tint: .red
+                                    ) { pendingDeletion = deck }
                                 }
-                                .buttonStyle(.plain)
-                                IconButton(
-                                    icon: "trash",
-                                    help: "删除该词库（卡片一并删除，词汇掌握度保留）",
-                                    tint: .red
-                                ) { pendingDeletion = deck }
                             }
-                            .padding(.trailing, Space.xl)
                         }
                     }
                 }
@@ -167,7 +166,7 @@ struct DeckManagerView: View {
             }
             .padding(.top, Space.xs)
         }
-        .padding(Space.xxl)
+        // 页面级留白由 `PageBody` 提供，这里只保留「占满视口居中」的原有层级。
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -178,12 +177,12 @@ struct DeckManagerView: View {
     ) -> some View {
         HStack(alignment: .top, spacing: Space.m) {
             Text("\(number)")
-                .font(.caption.weight(.bold))
+                .font(Type.captionEmphasis)
                 .foregroundStyle(.white)
                 .frame(width: Size.iconSmall, height: Size.iconSmall)
                 .background(Circle().fill(Color.accentColor))
             VStack(alignment: .leading, spacing: Space.xxs) {
-                Text(title).font(.callout.weight(.medium))
+                Text(title).font(Type.bodyMedium)
                 Text(detail)
                     .font(Type.caption)
                     .foregroundStyle(Ink.secondary)
@@ -201,7 +200,7 @@ struct DeckManagerView: View {
 
     private func deckRow(_ deck: DeckSummary) -> some View {        HStack(spacing: Space.l) {
             VStack(alignment: .leading, spacing: Space.xxs) {
-                Text(deck.name).fontWeight(.medium)
+                Text(deck.name).font(Type.bodyMedium)
                 HStack(spacing: Space.m) {
                     if let kind = deck.sourceKind {
                         tagView(kind)

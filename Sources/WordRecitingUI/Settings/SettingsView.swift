@@ -311,7 +311,7 @@ struct SettingsView: View {
                             .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
                         Text(model.fileName)
                             .font(Type.body)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(Ink.primary)
                             .lineLimit(1)
                         Spacer()
                         Text(model.sizeDescription)

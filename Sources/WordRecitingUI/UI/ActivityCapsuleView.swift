@@ -125,13 +125,9 @@ private struct ActivityDetailPopover: View {
             // 取消按钮（始终显示，调用 center.cancel）
             HStack {
                 Spacer()
-                Button(role: .destructive) {
+                DButton("取消任务", rank: .destructive, icon: "xmark.circle") {
                     center.cancel(item.id)
-                } label: {
-                    Label("取消任务", systemImage: "xmark.circle")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
         }
         .padding(Space.l)

@@ -16,7 +16,7 @@ struct GenThinkingLogView: View {
         Panel(padding: Space.m) {
             VStack(alignment: .leading, spacing: Space.m) {
                 HStack(spacing: Space.m) {
-                    Text("⏱ 生成过程").font(.caption.weight(.semibold))
+                    Text("⏱ 生成过程").font(Type.captionEmphasis)
                     Spacer()
                     if isGenerating {
                         // 原 Button(role: .destructive) + .bordered：用 destructive 档保留红字语义
@@ -61,7 +61,7 @@ struct GenThinkingLogView: View {
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text("当前阶段（模型自报）").font(Type.micro).foregroundStyle(Ink.tertiary)
                 Text(modelStage ?? fallbackStage)
-                    .font(.caption.weight(.semibold))
+                    .font(Type.captionEmphasis)
                     .lineLimit(2)
                     .foregroundStyle(modelStage == nil ? Color.primary : Color.accentColor)
             }

@@ -22,11 +22,16 @@ struct VocabularyInitView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        // @ai: 外层走 `PageScaffold`（工具条底 / 内边距 / 分隔线由骨架统一）。
+        //      标题行进 `toolbar`；主体进 `content`，由骨架接管页面级边距与滚动。
+        //      各 stage 的切换逻辑保持原样，只是外壳换成了骨架。
+        //      需要自带滚动与底部操作栏的 stage（标记段落）改由自己滚，故 `scrolls: false`；
+        //      各 stage 的页面级边距再统一由 `PageBody` 提供（本页 `contentPadding: 0`），
+        //      这样「正文滚动区有页面边距、底部操作栏贴边」的原有层级不会变。
+        PageScaffold(contentPadding: 0, scrolls: false) {
             header
-            Rule()
+        } content: {
             content
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .onAppear { vm.refreshOverview() }
     }
@@ -36,7 +41,7 @@ struct VocabularyInitView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: Space.m) {
             Text("词汇")
-                .font(Type.title).fontWeight(.semibold)
+                .font(Type.title)
             Text("你掌握的词汇是全局上下文（context clue），用于后续所有文章选词；"
                  + "状态与卡片彻底分离，只记会不会，不建卡。")
                 .font(Type.caption)
@@ -68,7 +73,9 @@ struct VocabularyInitView: View {
             }
             .padding(.vertical, Space.xxs)
         }
-        .padding(Space.page)
+        // 页面级留白由 `PageScaffold` 工具条提供，这里不再叠 `.padding(Space.page)`；
+        // 补 `maxWidth` 让标题行在工具条里仍然通栏左对齐（与迁移前一致）。
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func overviewChip(value: Int, label: String, color: Color) -> some View {
@@ -84,21 +91,21 @@ struct VocabularyInitView: View {
     @ViewBuilder
     private var content: some View {
         if mode == .wordList {
+            // @ai: 词表自带筛选条 + 滚动，页面边距由它内部按行处理。
             VocabularyListView(world: world)
         } else {
             switch vm.stage {
             case .idle:
-                emptyState
+                // 页面级边距统一交给 `PageBody`（= `Space.page`），页面里不再手写。
+                PageBody { emptyState }
             case .generating:
-                ProgressView("正在生成初始化段落…")
-                    .padding(Space.xxxl)
+                PageBody { ProgressView("正在生成初始化段落…") }
             case .ready:
                 paragraphEditor
             case .submitting:
-                ProgressView("正在记录你的词汇…")
-                    .padding(Space.xxxl)
+                PageBody { ProgressView("正在记录你的词汇…") }
             case .done:
-                doneState
+                PageBody { doneState }
             }
         }
     }
@@ -127,14 +134,17 @@ struct VocabularyInitView: View {
                 Text(msg).font(Type.caption).foregroundStyle(.red)
             }
         }
-        .padding(Space.xxxl)
+        // 页面级留白与滚动由 `PageBody` 提供，这里不再写 `.padding(Space.xxxl)`。
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - 标记段落
 
     private var paragraphEditor: some View {
+        // 页面级边距与滚动由 `PageBody` 给；这里只保留「正文区可滚 + 底部操作栏固定」的结构，
+        // 所以底部操作栏放在 `PageBody` 之外（保持原来贴边、不随正文滚动的层级）。
         VStack(spacing: 0) {
-            ScrollView {
+            PageBody {
                 VStack(alignment: .leading, spacing: Space.l) {
                     legend
                     Card(padding: Space.page) {
@@ -153,7 +163,6 @@ struct VocabularyInitView: View {
                         }
                     }
                 }
-                .padding(Space.page)
             }
             Rule()
             bottomBar
@@ -277,7 +286,8 @@ struct VocabularyInitView: View {
                 DButton("完成", rank: .primary) { vm.refreshOverview() }
             }
         }
-        .padding(Space.xxxl)
+        // 页面级留白与滚动由 `PageBody` 提供，这里不再写 `.padding(Space.xxxl)`。
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - 段落分词

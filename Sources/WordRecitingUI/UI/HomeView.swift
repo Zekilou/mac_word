@@ -13,21 +13,21 @@ struct HomeView: View {
         self.onNavigate = onNavigate
     }
 
+    /// @ai: 首页没有独立的页面级工具条——首行在首启时是欢迎卡、常态下是日期标题行，
+    ///      两者都属于同一段可滚动内容，所以用无工具条骨架 `PageBody`。
+    ///      滚动、页面边距（Space.page）、区块间距（Space.section）由骨架统一提供，
+    ///      这里不再手写 `ScrollView` / `.padding(Space.page)` / `spacing: Space.xl`。
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Space.xl) {
-                if let err = vm.errorMessage {
-                    Text(err).font(Type.caption).foregroundStyle(.red)
-                }
-                if vm.isFirstRun { welcomeCard }
-                todayHeader
-                kpiRow
-                vocabularyCard
-                weakCard
-                quickActions
+        PageBody {
+            if let err = vm.errorMessage {
+                Text(err).font(Type.caption).foregroundStyle(.red)
             }
-            .padding(Space.page)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            if vm.isFirstRun { welcomeCard }
+            todayHeader
+            kpiRow
+            vocabularyCard
+            weakCard
+            quickActions
         }
         .onAppear { vm.reload() }
     }
@@ -80,12 +80,12 @@ struct HomeView: View {
     ) -> some View {
         HStack(alignment: .top, spacing: Space.m) {
             Text(number)
-                .font(.caption.weight(.bold))
+                .font(Type.captionEmphasis)
                 .foregroundStyle(.white)
                 .frame(width: Size.iconTiny, height: Size.iconTiny)
                 .background(Circle().fill(Color.accentColor))
             VStack(alignment: .leading, spacing: Space.xxs) {
-                Text(title).font(.callout.weight(.medium))
+                Text(title).font(Type.bodyMedium)
                 Text(detail)
                     .font(Type.caption)
                     .foregroundStyle(Ink.secondary)
@@ -142,7 +142,7 @@ struct HomeView: View {
                         Text("个词已会").font(Type.caption).foregroundStyle(Ink.secondary)
                         if let level = vm.cefr?.current {
                             Text("· \(level.label) \(level.title)")
-                                .font(.caption.weight(.semibold))
+                                .font(Type.captionEmphasis)
                                 .foregroundStyle(Ink.secondary)
                         }
                         if let p = vm.profile {
@@ -185,13 +185,13 @@ struct HomeView: View {
                 VStack(spacing: Space.s) {
                     ForEach(vm.weakLemmas) { w in
                         HStack(spacing: Space.l) {
-                            Text(w.text).font(.body.weight(.medium))
+                            Text(w.text).font(Type.bodyMedium)
                                 .frame(width: Size.colWord, alignment: .leading)
                             Text("\(w.reviewCount) 次 · 不认识 \(w.againCount) 次")
                                 .font(Type.micro).foregroundStyle(Ink.secondary)
                             Spacer()
                             Text(String(format: "%.0f%%", w.againRatio * 100))
-                                .font(.caption.weight(.semibold))
+                                .font(Type.captionEmphasis)
                                 .foregroundStyle(w.againRatio > 0.5 ? .red : .orange)
                         }
                     }

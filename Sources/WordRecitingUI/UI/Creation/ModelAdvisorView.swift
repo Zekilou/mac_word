@@ -24,7 +24,7 @@ struct ModelAdvisorView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: Space.xs) {
-            Text("模型顾问").font(Type.title).fontWeight(.semibold)
+            Text("模型顾问").font(Type.title)
             HStack(spacing: Space.m) {
                 Text(hardware.chipName.isEmpty ? "本机" : hardware.chipName)
                     .font(Type.caption).padding(.horizontal, Space.m).padding(.vertical, Space.xxs)
@@ -53,7 +53,7 @@ struct ModelAdvisorView: View {
                     HStack(spacing: Space.m) {
                         Image(systemName: "sparkles").foregroundStyle(.yellow)
                         Text("推荐：\(model.displayName) · \(quant.quant)")
-                            .font(Type.body).fontWeight(.semibold)
+                            .font(Type.bodyEmphasis)
                         Text("\(Int(quant.fileSizeGB)) GB 文件")
                             .font(Type.caption).foregroundStyle(Ink.secondary)
                     }
@@ -93,7 +93,7 @@ struct ModelAdvisorView: View {
     private func modelSection(_ model: ModelEntry) -> some View {
         VStack(alignment: .leading, spacing: Space.s) {
             HStack(alignment: .firstTextBaseline, spacing: Space.s) {
-                Text(model.displayName).font(Type.caption).fontWeight(.semibold)
+                Text(model.displayName).font(Type.captionEmphasis)
                 Text(model.parameterScale).font(Type.caption).foregroundStyle(Ink.secondary)
                 Spacer()
                 DButton("镜像页", rank: .quiet, icon: "globe") {

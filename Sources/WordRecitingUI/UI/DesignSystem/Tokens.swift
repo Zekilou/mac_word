@@ -85,13 +85,46 @@ enum Type {
     static let statValueLarge = Font.system(size: 24, weight: .semibold, design: .monospaced)
     /// 46pt 衬线 —— 背诵卡面单词（全应用唯一的衬线体，刻意保留为焦点）。
     static let displaySerif = Font.system(size: 46, weight: .semibold, design: .serif)
+
+    // MARK: 带字重的常用组合
+    //
+    // @ai: 旧代码大量出现 `.font(.caption.weight(.semibold))` 这类「系统语义字号 +
+    //      手写 weight」的组合（21 处）。字号虽然走了系统语义，但**字重是散的**，
+    //      同一个「区块小标题」在不同页面可能是 medium / semibold / bold 三种。
+    //      这里把实际用到的组合固化成令牌，页面只挑令牌、不再手写 weight。
+
+    /// 11pt 半粗 —— 最小号强调（徽章数字、极紧凑标签）。
+    static let microEmphasis = Font.system(size: 11, weight: .semibold)
+    /// 12pt 半粗 —— 区块小标题 / 标签（最常用的小号强调）。
+    static let captionEmphasis = Font.system(size: 12, weight: .semibold)
+    /// 12pt 中粗 —— 行内次要强调。
+    static let captionMedium = Font.system(size: 12, weight: .medium)
+    /// 13pt 半粗 —— 正文级强调（行标题、按钮文案基线）。
+    static let bodyEmphasis = Font.system(size: 13, weight: .semibold)
+    /// 13pt 中粗 —— 列表主文本（比 `emphasis` 语义更明确：这是「行标题」）。
+    static let bodyMedium = Font.system(size: 13, weight: .medium)
+    /// 15pt 中粗 —— 中号强调（次级区块标题、卡片标题）。
+    static let leadEmphasis = Font.system(size: 15, weight: .semibold)
+    /// 15pt 中粗 —— 中号正文强调。
+    static let leadMedium = Font.system(size: 15, weight: .medium)
+    /// 20pt 半粗 —— 大号强调（详情页主标题）。
+    static let titleLarge = Font.system(size: 20, weight: .semibold)
+    /// 12pt 半粗等宽 —— 小号对齐数字（图例/表格内的百分比）。
+    static let monoCaption = Font.system(size: 12, weight: .semibold, design: .monospaced)
+    /// 13pt 等宽 + 半粗 —— 需要对齐的强调数字。
+    static let monoBodyEmphasis = Font.system(size: 13, weight: .semibold, design: .monospaced)
+    /// 13pt 等宽 —— 设置项数值对齐。
+    static let monoBodyRegular = Font.system(size: 13, design: .monospaced)
 }
 
 // MARK: - L2 语义令牌（页面只能用这层）
 
 extension Space {
-    /// 页面外边距。
-    static let page = Space.xl
+    /// 页面外边距 —— **比区块间距大一档**，让「页面边框」与「区块之间」产生层级差。
+    /// @ai: 以前 `page` 与 `section` 都等于 `xl`(16)，两者无差别，
+    ///      于是各页面随意选一个写，代码里出现两种等价写法、视觉上也没有层级。
+    ///      现在 page = xxl(24)、section = xl(16)，页面留白明显大于区块间距。
+    static let page = Space.xxl
     /// 区块之间的间距。
     static let section = Space.xl
     /// 区块标题与内容之间。

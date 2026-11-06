@@ -246,7 +246,7 @@ struct RewriteView: View {
                 Text(item.bodyPreview.isEmpty ? "(空)" : item.bodyPreview)
                     .font(Type.caption)
                     .lineLimit(3)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(Ink.primary)
                 HStack {
                     Text(item.generatorId).font(Type.micro).foregroundStyle(Ink.secondary)
                     Spacer()

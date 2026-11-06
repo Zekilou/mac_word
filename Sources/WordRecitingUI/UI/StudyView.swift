@@ -20,11 +20,17 @@ struct StudyView: View {
         _vm = State(initialValue: StudyViewModel(world: world))
     }
 
+    /// @ai: 页面骨架接管工具条底 / 工具条内边距 / 分隔线，页面不再自己拼
+    ///      `VStack(spacing: 0) { header; Rule(); content }`。
+    ///      **骨架不滚动**：背诵卡是固定画布（`StudyCardStyle` 520×340），
+    ///      外面套 `ScrollView` 会让里面的 `Spacer` 塌成 0、卡片贴顶且不再居中，
+    ///      所以走 `scrolls: false`；页面级边距仍由 `PageBody` 统一给（`Space.page`），
+    ///      页面里不再手写 `.padding(Space.page)` / `.padding(Space.xxl)`。
     var body: some View {
-        VStack(spacing: 0) {
+        PageScaffold(scrolls: false) {
             header
-            Rule()
-            content
+        } content: {
+            PageBody(scrolls: false) { content }
         }
         .onAppear { vm.reload() }
     }
@@ -59,19 +65,16 @@ struct StudyView: View {
                     vm.undoLastRating()
                 } label: {
                     Label("撤销", systemImage: "arrow.uturn.backward")
-                        .font(Type.caption)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
                 .help("回到刚才那张卡（调度已经写库，这里只放回队列）")
             }
             Button { vm.reload() } label: {
                 Image(systemName: "arrow.clockwise")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
             .help("刷新队列（已评分的不再出现，不会重置进度）")
         }
-        .padding(.horizontal, Space.page)
-        .padding(.vertical, Space.toolbarV)
     }
 
     /// 本轮进度：细条 + 分数。比单写「剩余 N 张」多给了「还剩多久」的直觉。
@@ -94,11 +97,12 @@ struct StudyView: View {
     private var content: some View {
         VStack(spacing: 0) {
             if let err = vm.errorMessage {
+                // @ai: 页面级左右边距已由 `PageBody` 提供，这里不再叠一层
+                //      `.padding(.horizontal, Space.page)`（旧实现会变成 48pt 缩进）。
                 Text(err)
                     .font(Type.caption)
                     .foregroundStyle(.red)
-                    .padding(.horizontal, Space.page)
-                    .padding(.top, Space.m)
+                    .padding(.bottom, Space.m)
             }
             if let card = vm.currentCard {
                 studyArea(card)
@@ -121,8 +125,9 @@ struct StudyView: View {
             ratingBar
             Spacer(minLength: 12)
         }
-        .padding(.horizontal, Space.xxl)
-        .padding(.vertical, Space.rowV)
+        // @ai: 只留左右留白由 `PageBody` 统一给；这里不加任何 padding，
+        //      否则卡片会被再挤一圈、左右不再与工具条对齐。
+        //      卡片自身 520×340 固定画布，居中靠 VStack 默认 center 对齐 + `Spacer`。
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // @ai: 用 id 绑定卡片身份，换卡时若仍是同一个视图树，翻转角度状态不会串到下一张。
         .id(card.cardId)
@@ -159,7 +164,7 @@ struct StudyView: View {
         VStack(spacing: Space.l) {
             HStack(alignment: .firstTextBaseline, spacing: Space.m) {
                 Text(card.plainText)
-                    .font(.title3.weight(.semibold))
+                    .font(Type.titleLarge)
                 if let phonetic = vm.currentPhonetic {
                     Text(phonetic)
                         .font(Type.caption)
@@ -169,7 +174,7 @@ struct StudyView: View {
                 Spacer(minLength: 0)
                 if let belief = vm.currentBelief {
                     Text(MasteryPresentation.percentText(belief))
-                        .font(.caption.weight(.semibold))
+                        .font(Type.captionEmphasis)
                         .monospacedDigit()
                         .foregroundStyle(stateColor(belief))
                         .help(MasteryPresentation.helpText(belief))

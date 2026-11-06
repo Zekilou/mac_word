@@ -14,16 +14,18 @@ struct ReadingView: View {
         _vm = State(initialValue: RSSViewModel(world: world))
     }
 
+    /// @ai: 分栏页 → `PageScaffold(scrolls: false)`：骨架只给顶部工具条（源切换 / 刷新 / 图例），
+    ///      **不**包滚动、**不**加内容区边距，各栏自己滚、自己处理边缘留白。
+    ///      分栏本身走 `SplitPane`（禁用 HSplitView 的等价安全写法），不再手写
+    ///      「VStack(spacing: 0) + Rule() + HStack + 固定宽 + Rule + 弹性宽」。
     var body: some View {
-        VStack(spacing: 0) {
+        PageScaffold(scrolls: false) {
             topBar
-            Rule()
-            HStack(spacing: 0) {
+        } content: {
+            SplitPane(leadingWidth: Size.paneArticle) {
                 articleList
-                    .frame(width: Size.paneArticle)
-                Rule()
+            } trailing: {
                 readingPane
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .onAppear { vm.reloadSources() }
@@ -31,6 +33,9 @@ struct ReadingView: View {
 
     // MARK: - 顶栏：来源切换 + 刷新 + 图例
 
+    /// 顶栏内容（工具条底 / 内边距 / 分隔线由 `PageScaffold` 统一提供）。
+    /// @ai: 不再手写 `.padding(Space.m)`——工具条内边距现在是骨架的 `Space.toolbarH/V`，
+    ///      与其它页面的工具条左右边距对齐。
     private var topBar: some View {
         VStack(spacing: Space.m) {
             HStack(spacing: Space.l) {
@@ -61,7 +66,6 @@ struct ReadingView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(Space.m)
     }
 
     private var legend: some View {
@@ -105,30 +109,32 @@ struct ReadingView: View {
 
     // MARK: - 阅读区
 
+    /// 右栏：文章正文。滚动由本栏自己提供（骨架 `scrolls: false`），
+    /// 栏内边距用 `Space.page`——与左栏列表文字、顶部工具条左边界对齐。
     @ViewBuilder
     private var readingPane: some View {
         if let item = vm.selectedItem {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Space.m) {
-                        Text(item.title)
-                            .font(Type.section)
-                        HStack(spacing: Space.m) {
-                            Text("左键标不会 · 右键改会/不会；未点击的词保持「出现过」")
-                                .font(Type.caption).foregroundStyle(Ink.secondary)
-                            Spacer()
-                        }
-                        Rule()
-                        if vm.isFetchingArticle {
-                            ProgressView().padding(.vertical, Space.xxl)
-                        } else {
-                            wordCloud
-                            continueReading(item)
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.m) {
+                    Text(item.title)
+                        .font(Type.section)
+                    HStack(spacing: Space.m) {
+                        Text("左键标不会 · 右键改会/不会；未点击的词保持「出现过」")
+                            .font(Type.caption).foregroundStyle(Ink.secondary)
+                        Spacer()
                     }
-                    .padding(Space.l)
+                    Rule()
+                    if vm.isFetchingArticle {
+                        ProgressView().padding(.vertical, Space.xxl)
+                    } else {
+                        wordCloud
+                        continueReading(item)
+                    }
                 }
+                .padding(Space.page)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             EmptyState(
                 icon: "newspaper",
