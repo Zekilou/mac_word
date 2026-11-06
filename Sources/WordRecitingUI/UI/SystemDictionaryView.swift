@@ -148,7 +148,7 @@ struct SystemDictionaryView: View {
                             band: vm.frequencyBand, rank: vm.frequencyRank))
                     Spacer()
                 }
-                InfoHint(text: "模型估计掌握度 · 词频坐标 · 最近事件（最多 5 条）")
+                InfoHint(text: "掌握度 · 词频 · 最近事件")
                 EventTimelineView(
                     items: vm.recentEvents,
                     emptyText: "这个词还没有事件记录——查词、标记或做题后就会出现")

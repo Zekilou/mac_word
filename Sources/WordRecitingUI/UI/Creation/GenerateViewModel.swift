@@ -647,10 +647,14 @@ struct WordCoverage: Identifiable, Equatable, Sendable {
 }
 
 /// 当前模型的可展示参数行（生成方式列底部信息卡）。
+/// 模型参数的一行（只读展示）。
+/// @ai: `help` 改为可选——大多数行是**自解释**的（「上下文 2048 tokens」
+///      不需要再解释一遍）。只有真正需要补充的才给 tooltip，
+///      否则每行右边都挂一个问号，用户会以为整页都在等他读。
 struct ModelParameter: Identifiable, Sendable {
     let label: String
     let value: String
-    let help: String
+    var help: String? = nil
     var id: String { label }
 }
 

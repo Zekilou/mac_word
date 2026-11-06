@@ -47,7 +47,7 @@ struct SynonymManagerView: View {
             VStack(alignment: .leading, spacing: Space.l) {
             // 源词
             VStack(alignment: .leading, spacing: Space.xs) {
-                Text("源词（要被替换的词）").font(Type.caption).foregroundStyle(Ink.secondary)
+                Text("源词").font(Type.caption).foregroundStyle(Ink.secondary)
                 TextField("输入单词前缀搜索，例：aban", text: bind(vm, \.fromSearchText))
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: vm.fromSearchText) { _, _ in vm.updateFromCandidates() }
@@ -164,8 +164,7 @@ struct SynonymManagerView: View {
             if vm.mappings.isEmpty {
                 EmptyState(
                     icon: "arrow.left.arrow.right",
-                    title: "尚未定义同义词映射",
-                    message: "在左侧选择源词和同义词，点击「添加映射」开始")
+                    title: "尚未定义同义词映射")
             } else {
                 // @ai: 不用 List（NSTableView），避免 macOS 27 FocusBridge 布局时 key view loop 崩溃
                 ScrollView {

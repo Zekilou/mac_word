@@ -37,8 +37,6 @@ struct SettingsView: View {
     private var generationSection: some View {
         section("默认生成配置") {
             VStack(alignment: .leading, spacing: Space.m) {
-                Text("与创作页「生成方式」列同一组件：此处配置为默认值，创作页可临时调整；API 凭据在下方「API 配置」区管理。")
-                    .font(Type.caption).foregroundStyle(Ink.secondary)
                 GenerationConfigSection(
                     generatorTier: Binding(
                         get: { vm.settings.generatorTier },

@@ -99,29 +99,47 @@ struct GenerationConfigSection: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .lineLimit(2)
                     }
-                    .help(p.help)
+                    .help(p.help ?? "")
                 }
             }
         }
     }
 
-    /// 生成流程说明卡：让用户知道当前配置下模型实际怎么工作。
-    /// @ai: 随配置动态——模型类型（思考型/普通）/ 融入流程（RAG 逐词）/ 词向量来源 / 验证强度。
+    /// 生成流程摘要卡。
+    /// @ai: 原来这里是 4 行 key-value（模型类型 / 融入方式 / 词向量 / 验证强度），
+    ///      每行还各挂一段 tooltip，其中「融入方式」的值是一整句
+    ///      「模型自选：先写后改写（RAG 选锚逐词融入）/ 按计划嵌入（草稿不喂目标词…）」。
+    ///      这些是**内部实现**，用户既改不了也不需要逐项读。
+    ///      现在收成一行摘要，细节全在 tooltip 里。
     private var pipelineCard: some View {
-        Panel(padding: Space.m) {
-            VStack(alignment: .leading, spacing: Space.s) {
-                Text("生成流程").font(Type.caption).foregroundStyle(Ink.secondary)
-                pipelineRow(icon: modelTypeIcon, tint: modelType == .thinking ? .orange : .secondary,
-                            label: "模型类型", value: modelTypeText, help: modelTypeHelp)
-                pipelineRow(icon: "arrow.triangle.branch", tint: .secondary,
-                            label: "融入方式", value: embedFlowText, help: embedFlowHelp)
-                pipelineRow(icon: embeddingSource == .remoteAPI ? "globe" : "internaldrive",
-                            tint: embeddingSource == .remoteAPI ? .blue : .secondary,
-                            label: "词向量", value: embeddingText, help: embeddingSource.help)
-                pipelineRow(icon: "checkmark.seal", tint: .secondary,
-                            label: "验证强度", value: embeddingVerification.label, help: embeddingVerification.help)
-            }
+        HStack(spacing: Space.s) {
+            Image(systemName: modelTypeIcon)
+                .font(Type.micro)
+                .foregroundStyle(modelType == .thinking ? .orange : Ink.tertiary)
+            Text(pipelineSummary)
+                .font(Type.micro)
+                .foregroundStyle(Ink.tertiary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            InfoHint(text: pipelineDetail)
         }
+    }
+
+    /// 一行摘要：模型类型 · 融入方式 · 词向量
+    private var pipelineSummary: String {
+        var parts = [modelTypeText, embedFlowShort]
+        if embeddingSource == .remoteAPI { parts.append("远端向量") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// tooltip：完整实现细节。
+    private var pipelineDetail: String {
+        """
+        \(modelTypeHelp)
+        \(embedFlowHelp)
+        词向量：\(embeddingText)（\(embeddingSource.help)）
+        验证强度：\(embeddingVerification.label)（\(embeddingVerification.help)）
+        """
     }
 
     private func pipelineRow(icon: String, tint: Color, label: String, value: String, help: String) -> some View {
@@ -139,9 +157,9 @@ struct GenerationConfigSection: View {
         .help(help)
     }
 
-    /// 融入流程说明：模型自选 plan-embed（按计划嵌入）/ generate-rewrite（先写后改写逐词融入）。
-    private var embedFlowText: String {
-        "模型自选：先写后改写（RAG 选锚逐词融入）/ 按计划嵌入（草稿不喂目标词，融合度低自动跳过）"
+    /// 融入方式短语（列表用，一行内说完）。
+    private var embedFlowShort: String {
+        modelType == .thinking ? "浅管线" : "RAG 逐词"
     }
 
     private var embedFlowHelp: String {
@@ -204,38 +222,32 @@ struct GenerationConfigSection: View {
         switch tier {
         case .processLocal:
             let file = (localPath as NSString?)?.lastPathComponent ?? "未选择模型文件"
+            // @ai: 参数量从模型名里就能看出来（qwen2.5-0.5b），单独一行是纯噪音，
+            //      已并入「模型」一项显示为 `qwen2.5-0.5b · 0.5B`，省一行。
             params = [
-                .init(label: "模型文件", value: file, help: "「设置 → 模型」中选择的 GGUF 文件"),
-                .init(label: "参数量", value: parameterScale(from: file) ?? "未知",
-                      help: "从模型名提取，供参考"),
-                .init(label: "上下文窗口", value: "\(contextWindow) tokens",
-                      help: "生成参数中可调；超出时自动压缩输入上下文"),
+                .init(label: "模型",
+                      value: file + (parameterScale(from: file).map { " · \($0)" } ?? "")),
+                .init(label: "上下文", value: "\(contextWindow) tokens"),
             ]
         case .remote:
             params = [
-                .init(label: "模型", value: model.isEmpty ? "未配置" : model,
-                      help: "服务地址 / API Key 见「设置 → 模型 → API 配置」"),
-                .init(label: "参数量", value: parameterScale(from: model) ?? "未知",
-                      help: "从模型名提取，供参考"),
-                .init(label: "上下文窗口", value: "\(contextWindow) tokens",
-                      help: "按设置值；超出时自动压缩输入上下文，实际以服务端为准"),
+                .init(label: "模型", value: model.isEmpty ? "未配置" : model),
+                .init(label: "上下文", value: "\(contextWindow) tokens"),
             ]
         }
         params += samplingParameters(maxWords: maxWords, outputTokenLimit: outputTokenLimit)
         return params
     }
 
-    /// 采样参数（生成正文与自查共用说明）。
+    /// 采样参数。
+    /// @ai: 只留用户真正关心的两项。`自查温度` 是内部 pass 的实现细节，
+    ///      `最大输出` 的「自动」也已足够自解释——它们原来各占一行 + 一段 tooltip，
+    ///      是「只读信息列太满」的典型。要调这些值去设置页，不在这里列。
     private static func samplingParameters(maxWords: Int, outputTokenLimit: Int?) -> [ModelParameter] {
         [
-            .init(label: "温度（创意度）", value: "0.7",
-                  help: "生成正文的采样温度：越高越发散/有创意，越低越保守稳定"),
-            .init(label: "自查温度", value: "0.3",
-                  help: "规划/自查 pass 用低温，保证稳定"),
-            .init(label: "最大输出", value: outputTokenLimit.map { "\($0) tokens" } ?? "自动",
-                  help: "单次生成 token 上限；自动 = 目标字数×1.5+200（越大越长），设置中可固定覆盖"),
-            .init(label: "目标字数", value: "\(maxWords) 词",
-                  help: "提示词要求文章长度（约）"),
+            .init(label: "温度", value: "0.7",
+                  help: "越高越发散，越低越稳定"),
+            .init(label: "目标字数", value: "\(maxWords) 词"),
         ]
     }
 

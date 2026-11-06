@@ -42,7 +42,7 @@ struct VocabularyInitView: View {
         VStack(alignment: .leading, spacing: Space.m) {
             Text("词汇")
                 .font(Type.title)
-            InfoHint(text: "你掌握的词汇是全局上下文（context clue），用于后续所有文章选词；状态与卡片彻底分离，只记会不会，不建卡。")
+            InfoHint(text: "词汇是全局上下文，用于后续文章选词。只记会不会，不建卡。")
                 .foregroundStyle(Ink.secondary)
             HStack(spacing: Space.l) {
                 overviewChip(value: vm.overview.known, label: "已会", color: .green)
@@ -275,7 +275,7 @@ struct VocabularyInitView: View {
                     Text("不会").font(Type.caption).foregroundStyle(Ink.secondary)
                 }
             }
-            InfoHint(text: "这些词已写入全局词汇掌握度，后续生成文章时会结合你的词汇量选词。")
+            InfoHint(text: "已写入全局词汇掌握度。")
             HStack(spacing: Space.l) {
                 DButton("再生成一段", rank: .secondary) { vm.reset() }
                 DButton("完成", rank: .primary) { vm.refreshOverview() }

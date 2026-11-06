@@ -56,8 +56,6 @@ extension GenerateView {
                     Text(vm.wordScoringID == .random ? "随机选词" : "按策略选词")
                 }
             }
-            Text("从「\(vm.wordFilter.label)」的词中按「\(label(for: vm.wordScoringID))」选 \(max(1, vm.randomCount)) 个作为目标词")
-                .font(Type.micro).foregroundStyle(Ink.tertiary)
         }
     }
 
