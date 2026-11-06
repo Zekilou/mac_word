@@ -45,7 +45,7 @@ struct AnalyticsView: View {
     private var abilitySection: some View {
         Section(
             title: "掌握度分布",
-            note: "BKT 后验概率档位（≥\(MasteryPresentation.percentText(WordMarkState.knownThreshold)) 会 · ≤\(MasteryPresentation.percentText(WordMarkState.unknownThreshold)) 不会 · 中间学习中）"
+            note: "BKT 后验概率档位"
         ) {
             if let d = vm.distribution, d.total > 0 {
                 LazyVGrid(
@@ -54,16 +54,19 @@ struct AnalyticsView: View {
                     alignment: .leading, spacing: Space.m
                 ) {
                     StatTile(label: "已会", value: "\(d.known)",
-                             icon: "checkmark.circle.fill", tint: .green)
+                             icon: "checkmark.circle.fill", tint: .green,
+                             bordered: false)
                     StatTile(label: "不会", value: "\(d.unknown)",
-                             icon: "xmark.circle.fill", tint: .red)
+                             icon: "xmark.circle.fill", tint: .red,
+                             bordered: false)
                     StatTile(label: "学习中", value: "\(d.learning)",
-                             icon: "circle.lefthalf.filled", tint: .orange)
+                             icon: "circle.lefthalf.filled", tint: .orange,
+                             bordered: false)
                     StatTile(label: "无概率", value: "\(max(0, (vm.overview?.unmarked ?? 0)))",
                              icon: "circle", tint: Ink.secondary)
                 }
             } else {
-                Text("还没有概率数据。先在「词汇」页初始化，或阅读 RSS 文章——事件积累后模型会给出概率。")
+                Text("先在「词汇」页初始化，或读几篇文章。")
                     .font(Type.caption).foregroundStyle(Ink.secondary).padding(.vertical, Space.xs)
             }
         }
@@ -93,7 +96,7 @@ struct AnalyticsView: View {
                         coverageHint(p)
                         disclaimer
                     } else {
-                        Text("还没有可估算的数据。事件积累后这里会按词频带给出词汇量估算。")
+                        Text("还没有可估算的数据。")
                             .font(Type.caption).foregroundStyle(Ink.secondary)
                             .padding(.vertical, Space.xs)
                     }
@@ -137,8 +140,7 @@ struct AnalyticsView: View {
             AnalyticsLevelBar(segments: [
                 LevelSegment(label: "进度", value: progress.progressToNext, tint: .accent)
             ], total: 1)
-            Text("CEFR 参照：A1≈500 / A2≈1.5k / B1≈2.5k / B2≈4.5k / C1≈8k / C2≈10k 词族（参考坐标，非硬标准）")
-                .font(Type.micro).foregroundStyle(Ink.tertiary)
+            InfoHint(text: "CEFR 参照：A1≈500 / A2≈1.5k / B1≈2.5k / B2≈4.5k / C1≈8k / C2≈10k 词族（参考坐标，非硬标准）")
         }
     }
 
@@ -200,11 +202,15 @@ struct AnalyticsView: View {
         }
     }
 
+    /// 估算口径说明。
+    /// @ai: 原来是一整段铺在页面底部的文字（「估算 = 已观测词的后验概率之和 + …」），
+    ///      用户每次进分析页都得先读一段算法说明。现在收进问号 tooltip。
     private var disclaimer: some View {
-        Text("说明：估算 = 已观测词的后验概率之和 + 观测充分的词频带（≥\(VocabularyProfileBuilder.minObservedForExtrapolation) 个）按平滑认识率外推；观测不足的带只统计已观测词。\(vm.hasFrequencyTable ? "" : "当前未加载词频表，只统计已观测词。")词频带只是参考坐标，不作硬标准；概率是模型推断值，不是精确测量。")
-            .font(Type.micro)
-            .foregroundStyle(Ink.tertiary)
-            .fixedSize(horizontal: false, vertical: true)
+        InfoHint(text: """
+        估算口径：已观测词的后验概率之和 + 观测充分的词频带（≥\(VocabularyProfileBuilder.minObservedForExtrapolation) 个）按平滑认识率外推；观测不足的带只统计已观测词。
+        \(vm.hasFrequencyTable ? "" : "当前未加载词频表，只统计已观测词。")
+        词频带只是参考坐标，不作硬标准；概率是模型推断值，不是精确测量。
+        """)
     }
 
     // MARK: - 记忆质量（二期）
@@ -213,10 +219,10 @@ struct AnalyticsView: View {
     private var memoryQualitySection: some View {
         Section(
             title: "记忆质量",
-            note: "回答「记牢了吗」——真实保留率、评分分布、经验遗忘曲线"
+            note: "真实保留率 · 评分分布 · 遗忘曲线"
         ) {
             if vm.reviewRecords.isEmpty {
-                Text("还没有复习数据。先背几个词，这里会出现保留率与遗忘曲线。")
+                Text("先背几个词。")
                     .font(Type.caption).foregroundStyle(Ink.secondary).padding(.vertical, Space.xs)
             } else {
                 // 卡片网格与「顽固词」是两块独立图表单元，保持原来的 Space.l 节奏。
@@ -334,7 +340,7 @@ struct AnalyticsView: View {
     private var behaviorSection: some View {
         Section(
             title: "学习行为",
-            note: "回答「学得勤吗」——日历热力图、连续天数、复习量与时段分布"
+            note: "热力图 · 连续天数 · 复习量 · 时段"
         ) {
             if vm.dailyStats.isEmpty {
                 Text("还没有学习记录。").font(Type.caption).foregroundStyle(Ink.secondary)
@@ -413,7 +419,7 @@ struct AnalyticsView: View {
     private var forecastSection: some View {
         Section(
             title: "负载预测",
-            note: "回答「接下来有多忙」——复习队列内卡片的未来 30 天到期分布"
+            note: "未来 30 天到期量"
         ) {
             if vm.forecast.isEmpty {
                 Text("还没有可预测的卡片。").font(Type.caption).foregroundStyle(Ink.secondary)
@@ -422,9 +428,11 @@ struct AnalyticsView: View {
                                              spacing: Space.m)],
                           alignment: .leading, spacing: Space.m) {
                     StatTile(label: "今日负载", value: "\(vm.todayLoad)",
-                             icon: "clock.badge.exclamationmark", tint: .accentColor)
+                             icon: "clock.badge.exclamationmark", tint: .accentColor,
+                             bordered: false)
                     StatTile(label: "峰值日", value: peakText,
-                             icon: "chart.line.uptrend.xyaxis", tint: .orange)
+                             icon: "chart.line.uptrend.xyaxis", tint: .orange,
+                             bordered: false)
                 }
                 ChartCard(title: "未来 30 天到期量",
                           subtitle: "第 1 天 = 今天（含已过期与新卡）") {
@@ -445,7 +453,7 @@ struct AnalyticsView: View {
     private var reviewSection: some View {
         Section(
             title: "复习统计",
-            note: "卡片维度：与上面的词汇画像不是同一层级（这里是背诵调度数据）"
+            note: "背诵调度数据"
         ) {
             statGrid
         }
@@ -461,15 +469,21 @@ struct AnalyticsView: View {
                                    spacing: Space.m)],
                 alignment: .leading, spacing: Space.m
             ) {
-                StatTile(label: "总词数", value: "\(s.totalCards)", icon: "rectangle.stack")
-                StatTile(label: "已学", value: "\(s.studiedCards)", icon: "book.fill")
-                StatTile(label: "今日到期", value: "\(s.dueCount)", icon: "clock")
+                StatTile(label: "总词数", value: "\(s.totalCards)", icon: "rectangle.stack",
+                             bordered: false)
+                StatTile(label: "已学", value: "\(s.studiedCards)", icon: "book.fill",
+                             bordered: false)
+                StatTile(label: "今日到期", value: "\(s.dueCount)", icon: "clock",
+                             bordered: false)
                 StatTile(label: "今日已复习", value: "\(s.reviewedToday)",
-                         icon: "checkmark.circle")
-                StatTile(label: "总复习次数", value: "\(s.totalReviews)", icon: "repeat")
+                         icon: "checkmark.circle",
+                             bordered: false)
+                StatTile(label: "总复习次数", value: "\(s.totalReviews)", icon: "repeat",
+                             bordered: false)
                 StatTile(label: "AGAIN 率",
                          value: String(format: "%.0f%%", s.againRatio * 100),
-                         icon: "exclamationmark.triangle")
+                         icon: "exclamationmark.triangle",
+                             bordered: false)
             }
         }
     }

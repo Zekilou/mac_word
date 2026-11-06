@@ -7,21 +7,29 @@ import WordRecitingCore
 
 // MARK: 统计块
 
-/// 统计卡：看板上的一个指标。
-/// @ai: 这是**全应用唯一的统计卡**。此前 HomeView.kpiCard 与 AnalyticsView.statCard
-///      是两份实现（图标大小、背景透明度、圆角都不同），同一屏里出现两种统计卡。
-///      数字用等宽体（`Type.statValue`）——否则 9→10 时整行抖动。
+/// 统计块：看板上的一个指标。
+///
+/// @ai: 这是**全应用唯一的统计块**。数字用等宽体（`Type.statValue`）——
+///      否则 9→10 时整行抖动。
+///
+///      `bordered` 决定有没有框：
+///      · `true`  —— 首页 KPI。那是页面焦点，一屏只有 2–4 个，值得给边界。
+///      · `false` —— 分析页的密集指标。一页 12 个指标如果每个都套框，
+///                   就成了 12 个方格，视觉噪音远超信息量。密集数据靠
+///                   留白与分隔线分组，不靠边框。
 struct StatTile: View {
     let label: String
     let value: String
     var icon: String? = nil
     var tint: Color = Ink.secondary
-    /// 数值下方的补充说明。
+    /// 数值下方的补充说明。**保持极短**（三五个字），长解释走 `InfoHint`。
     var note: String? = nil
     /// 点击（可选）。有 action 时显示 hover 反馈。
     var action: (() -> Void)? = nil
     /// 强调样式（首页主 KPI 用，数字更大）。
     var emphasis: Bool = false
+    /// 是否画边框与底纹。密集指标区传 `false`。
+    var bordered: Bool = true
 
     @State private var hovering = false
 
@@ -57,15 +65,18 @@ struct StatTile: View {
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, Space.l)
-        .padding(.vertical, Space.m)
+        .padding(.horizontal, bordered ? Space.l : 0)
+        .padding(.vertical, bordered ? Space.m : Space.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            hovering ? Surface.card : Surface.card.opacity(0.55),
-            in: .rect(cornerRadius: Radius.card))
-        .overlay(
-            RoundedRectangle(cornerRadius: Radius.card)
-                .strokeBorder(Surface.separator, lineWidth: Stroke.hairline))
+        .background {
+            if bordered {
+                RoundedRectangle(cornerRadius: Radius.card)
+                    .fill(hovering ? Surface.card : Surface.card.opacity(0.55))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Radius.card)
+                            .strokeBorder(Surface.separator, lineWidth: Stroke.hairline))
+            }
+        }
         .contentShape(Rectangle())
 
         if let action {

@@ -41,8 +41,11 @@ struct GenerationConfigSection: View {
             if generatorTier == .remote {
                 apiPicker
             } else {
-                Text("进程内本地引擎：模型文件在「进程内模型」区选择后使用（swift-llama-cpp 接入中）。")
-                    .font(Type.caption).foregroundStyle(Ink.secondary)
+                HStack(spacing: Space.xs) {
+                    Text("进程内本地引擎")
+                        .font(Type.caption).foregroundStyle(Ink.secondary)
+                    InfoHint(text: "模型文件在「进程内模型」区选择后使用（swift-llama-cpp 接入中）。")
+                }
             }
 
             // 当前模型参数信息卡（参数 / 上下文窗口 / 采样参数）

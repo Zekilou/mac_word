@@ -121,7 +121,7 @@ struct ReadingView: View {
                     Text(item.title)
                         .font(Type.section)
                     HStack(spacing: Space.m) {
-                        Text("左键标不会 · 右键改会/不会；未点击的词保持「出现过」")
+                        Text("左键标不会 · 右键改")
                             .font(Type.caption).foregroundStyle(Ink.secondary)
                         Spacer()
                     }

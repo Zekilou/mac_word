@@ -42,9 +42,7 @@ struct VocabularyInitView: View {
         VStack(alignment: .leading, spacing: Space.m) {
             Text("词汇")
                 .font(Type.title)
-            Text("你掌握的词汇是全局上下文（context clue），用于后续所有文章选词；"
-                 + "状态与卡片彻底分离，只记会不会，不建卡。")
-                .font(Type.caption)
+            InfoHint(text: "你掌握的词汇是全局上下文（context clue），用于后续所有文章选词；状态与卡片彻底分离，只记会不会，不建卡。")
                 .foregroundStyle(Ink.secondary)
             HStack(spacing: Space.l) {
                 overviewChip(value: vm.overview.known, label: "已会", color: .green)
@@ -119,7 +117,7 @@ struct VocabularyInitView: View {
                 .foregroundStyle(Color.accentColor)
             Text("先让我了解你的词汇量")
                 .font(Type.section)
-            Text("我会生成一段日常英文，你把不会的词标出来，其余自动记为已掌握。")
+            Text("生成一段英文，标出不会的词。")
                 .font(Type.caption)
                 .foregroundStyle(Ink.secondary)
                 .multilineTextAlignment(.center)
@@ -194,7 +192,7 @@ struct VocabularyInitView: View {
                 Text("新词 \(vm.newWordCount)").font(Type.caption).foregroundStyle(Color.accentColor)
             }
             Spacer()
-            Text("左键标不会 · 右键改会/不会 · 提交时统一落库")
+            Text("左键标不会 · 右键改")
                 .font(Type.caption).foregroundStyle(Ink.secondary)
         }
     }
@@ -277,10 +275,7 @@ struct VocabularyInitView: View {
                     Text("不会").font(Type.caption).foregroundStyle(Ink.secondary)
                 }
             }
-            Text("这些词已写入全局词汇掌握度，后续生成文章时会结合你的词汇量选词。")
-                .font(Type.caption).foregroundStyle(Ink.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 420)
+            InfoHint(text: "这些词已写入全局词汇掌握度，后续生成文章时会结合你的词汇量选词。")
             HStack(spacing: Space.l) {
                 DButton("再生成一段", rank: .secondary) { vm.reset() }
                 DButton("完成", rank: .primary) { vm.refreshOverview() }

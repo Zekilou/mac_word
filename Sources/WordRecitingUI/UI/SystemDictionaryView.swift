@@ -148,17 +148,13 @@ struct SystemDictionaryView: View {
                             band: vm.frequencyBand, rank: vm.frequencyRank))
                     Spacer()
                 }
-                Text("模型估计掌握度 · 词频坐标 · 最近事件（最多 5 条）")
-                    .font(Type.caption)
-                    .foregroundStyle(Ink.tertiary)
+                InfoHint(text: "模型估计掌握度 · 词频坐标 · 最近事件（最多 5 条）")
                 EventTimelineView(
                     items: vm.recentEvents,
                     emptyText: "这个词还没有事件记录——查词、标记或做题后就会出现")
             }
             Rule()
-            Text("数据来源：macOS 系统词典（Dictionary Services）")
-                .font(Type.caption)
-                .foregroundStyle(Ink.tertiary)
+            InfoHint(text: "数据来源：macOS 系统词典（Dictionary Services）")
         }
         .frame(maxWidth: 720, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .topLeading)

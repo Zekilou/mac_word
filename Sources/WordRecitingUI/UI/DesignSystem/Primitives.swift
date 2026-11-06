@@ -164,3 +164,32 @@ struct KeyHint: View {
             .background(Ink.primary.opacity(0.06), in: .rect(cornerRadius: 3))
     }
 }
+
+// MARK: 说明提示
+
+/// 小问号 + 悬浮 tooltip。
+///
+/// @ai: 这是「页面像在朗读文章」的解药。以前那些算法说明、参考坐标、免责声明
+///      （「估算 = 已观测词的后验概率之和 + …」「参考坐标，非硬标准」）
+///      直接铺在页面上，用户每次进页面都得先读一段话才能看数据。
+///
+///      规则：
+///      · **数据本身**（计数、日期、「已观测 3/12」）→ 直接显示，不进 tooltip；
+///      · **解释数据怎么来的 / 免责声明 / 用法** → 全部塞进这里，只在 hover 时出现。
+///
+///      问号用 `questionmark.circle` 而非文字，避免又变成一句话。
+struct InfoHint: View {
+    /// tooltip 正文。支持多行（`\n`）。
+    let text: String
+
+    @State private var hovering = false
+
+    var body: some View {
+        Image(systemName: "questionmark.circle")
+            .font(.system(size: 11))
+            .foregroundStyle(hovering ? Ink.secondary : Ink.tertiary)
+            .onHover { hovering = $0 }
+            .help(text)
+            .accessibilityLabel(text)
+    }
+}

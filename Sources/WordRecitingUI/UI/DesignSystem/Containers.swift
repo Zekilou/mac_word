@@ -87,19 +87,20 @@ struct Panel<Content: View>: View {
 ///      标题与内容间距 8pt。
 struct Section<Content: View>: View {
     let title: String
+    /// 说明文本。**不再内联显示**，改为标题旁的小问号 + 悬浮 tooltip。
+    /// @ai: 以前这里把说明直接铺在标题右边（最多两行），页面上于是充满
+    ///      「估算 = …外推」「参考坐标，非硬标准」这类整句解释，
+    ///      用户进页面像在读说明文档而不是看数据。现在一律收进 tooltip。
     var note: String? = nil
     var trailing: AnyView? = nil
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.sectionTitle) {
-            HStack(alignment: .firstTextBaseline, spacing: Space.m) {
+            HStack(alignment: .firstTextBaseline, spacing: Space.s) {
                 Text(title).font(Type.section)
                 if let note {
-                    Text(note)
-                        .font(Type.caption)
-                        .foregroundStyle(Ink.tertiary)
-                        .lineLimit(2)
+                    InfoHint(text: note)
                 }
                 Spacer(minLength: 0)
                 if let trailing { trailing }

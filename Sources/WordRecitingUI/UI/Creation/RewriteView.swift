@@ -141,7 +141,7 @@ struct RewriteView: View {
             if vm.generatorTier == .remote {
                 apiConfigSelector
             } else {
-                Text("进程内本地引擎：模型文件在「设置 → 模型 → 进程内模型」中选择后使用。")
+                InfoHint(text: "模型文件在「设置 → 模型 → 进程内模型」中选择后使用。")
                     .font(Type.micro).foregroundStyle(Ink.secondary)
             }
         }
@@ -203,7 +203,7 @@ struct RewriteView: View {
                 } else if let stored = vm.selectedArticle {
                     diffText(body: stored.body, spans: stored.spans)
                 } else {
-                    Text("点击「AI 改写」生成（按当前生成方式走 LLM）；或从右侧历史选择一篇回看。")
+                    Text("点「AI 改写」生成，或从右侧历史选一篇。")
                         .foregroundStyle(Ink.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(Space.m)
