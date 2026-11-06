@@ -90,9 +90,12 @@ struct CardBrowserView: View {
         } label: {
             HStack(alignment: .top, spacing: Space.m) {
                 VStack(alignment: .leading, spacing: Space.xxs) {
+                    // 卡片行主词：是这一行的**内容主体**，用 `emphasis`(13 medium)
+                    // 而非 `section`——后者是「小节标题」语义，用在数据行上会让
+                    // 每行看着都像标题。
                     Text(card.plainText)
-                        .font(Type.section)
-                        .foregroundStyle(vm.selected?.cardId == card.cardId ? .primary : .primary)
+                        .font(Type.emphasis)
+                        .foregroundStyle(Ink.primary)
                     if let def = card.definition, !def.isEmpty {
                         Text(def)
                             .font(Type.caption)

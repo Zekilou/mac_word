@@ -284,11 +284,11 @@ struct VocabularyInitView: View {
                 .font(Type.caption).foregroundStyle(Ink.secondary)
             HStack(spacing: Space.section) {
                 VStack {
-                    Text("\(vm.submittedCount - vm.newUnknownCount)").font(Type.title).bold()
+                    Text("\(vm.submittedCount - vm.newUnknownCount)").font(Type.statValue)
                     Text("已会").font(Type.caption).foregroundStyle(Ink.secondary)
                 }
                 VStack {
-                    Text("\(vm.newUnknownCount)").font(Type.title).bold()
+                    Text("\(vm.newUnknownCount)").font(Type.statValue)
                     Text("不会").font(Type.caption).foregroundStyle(Ink.secondary)
                 }
             }

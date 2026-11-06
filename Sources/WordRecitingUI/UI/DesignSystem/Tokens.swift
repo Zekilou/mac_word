@@ -53,12 +53,24 @@ enum Radius {
 enum Type {
     /// 34pt —— 页面唯一的视觉焦点（背诵页卡面单词）。
     static let display = Font.system(size: 34, weight: .semibold)
-    /// 22pt —— 页面主标题。
+    /// 22pt —— **页面级唯一主标题**（空状态大标题、详情页主词）。
+    /// @ai: 它曾经同时被拿去当音标、统计数字、卡片主词用，导致 22pt 到底代表
+    ///      「这是标题」还是「这是大字」说不清。现在它只做标题。
     static let title = Font.system(size: 22, weight: .semibold)
-    /// 15pt 半粗 —— 区块标题（旧 `.headline` 的视觉重量，但小 2pt 以适配密集界面）。
-    static let section = Font.system(size: 15, weight: .semibold)
+    /// 17pt 半粗 —— **区块标题**（`Section` 组件内部用）。
+    /// @ai: 补齐 13→22 之间的空档。macOS 原生阶梯是 .headline 13 / .title3 15 /
+    ///      .title2 17，17 正是「区块标题」的合适位置。原来区块标题是 15pt，
+    ///      比行标题（13pt）只大 2pt，层级读不出来。
+    static let heading = Font.system(size: 17, weight: .semibold)
+    /// 13pt 半粗 —— **小节标题 / 卡片内标题**（比区块标题低一档）。
+    static let section = Font.system(size: 13, weight: .semibold)
     /// 13pt 中粗 —— 行标题 / 强调正文。
     static let emphasis = Font.system(size: 13, weight: .medium)
+    /// `emphasis` 的语义别名：列表主文本 / 卡片标题。
+    /// @ai: 与 `emphasis` 同值。保留名字是因为「行标题」和「强调正文」在
+    ///      调用点上是两种意图，读代码时能分清；但**不要**再给它不同的字号，
+    ///      否则又会出现两份看起来一样、改起来不同步的令牌。
+    static let bodyMedium = emphasis
     /// 13pt —— 正文。
     static let body = Font.system(size: 13)
     /// 12pt —— 次要说明。
@@ -101,10 +113,6 @@ enum Type {
     static let captionMedium = Font.system(size: 12, weight: .medium)
     /// 13pt 半粗 —— 正文级强调（行标题、按钮文案基线）。
     static let bodyEmphasis = Font.system(size: 13, weight: .semibold)
-    /// 13pt 中粗 —— 列表主文本（比 `emphasis` 语义更明确：这是「行标题」）。
-    static let bodyMedium = Font.system(size: 13, weight: .medium)
-    /// 15pt 中粗 —— 中号强调（次级区块标题、卡片标题）。
-    static let leadEmphasis = Font.system(size: 15, weight: .semibold)
     /// 15pt 中粗 —— 中号正文强调。
     static let leadMedium = Font.system(size: 15, weight: .medium)
     /// 20pt 半粗 —— 大号强调（详情页主标题）。

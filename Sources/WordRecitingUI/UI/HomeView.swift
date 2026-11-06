@@ -43,7 +43,7 @@ struct HomeView: View {
                 Image(systemName: "hand.wave.fill")
                     .foregroundStyle(Color.accentColor)
                 Text("欢迎使用 wordincontxt")
-                    .font(Type.section)
+                    .font(Type.heading)
                 Spacer()
             }
             Text("纯本地运行，不联网、不采集数据。三步开始：")

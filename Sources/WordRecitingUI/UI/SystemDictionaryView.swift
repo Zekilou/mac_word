@@ -90,7 +90,7 @@ struct SystemDictionaryView: View {
                         .font(Type.displaySmall)
                     HStack(spacing: Space.m) {
                         if let phonetic = entry.phonetic {
-                            Text(phonetic).font(Type.title).foregroundStyle(Ink.secondary)
+                            Text(phonetic).font(Type.monoLead).foregroundStyle(Ink.secondary)
                         }
                         if let pos = entry.partOfSpeech {
                             Text(pos)

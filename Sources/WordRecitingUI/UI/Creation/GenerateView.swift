@@ -162,7 +162,7 @@ struct GenerateView: View {
     private var historyDrawer: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: Space.m) {
-                Text("生成历史").font(Type.section)
+                Text("生成历史").font(Type.heading)
                 Spacer()
                 IconButton(icon: "arrow.clockwise", help: "刷新历史") {
                     vm.loadHistory()

@@ -44,7 +44,7 @@ struct ColumnShell<Trailing: View, Content: View, Footer: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: Space.m) {
-                Text(title).font(Type.section)
+                Text(title).font(Type.heading)
                 Spacer()
                 trailing
             }

@@ -40,7 +40,7 @@ struct RewriteView: View {
     private var inputDrawer: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: Space.m) {
-                Text("输入设置").font(Type.section)
+                Text("输入设置").font(Type.heading)
                 Spacer()
                 IconButton(icon: "chevron.compact.left", help: "收起侧栏") {
                     showInput = false
@@ -61,7 +61,7 @@ struct RewriteView: View {
     private var historyDrawer: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: Space.m) {
-                Text("生成历史").font(Type.section)
+                Text("生成历史").font(Type.heading)
                 Spacer()
                 IconButton(icon: "arrow.clockwise", help: "刷新历史") {
                     vm.loadHistory()
@@ -186,7 +186,7 @@ struct RewriteView: View {
                            help: showInput ? "收起输入面板" : "展开输入面板") {
                     showInput.toggle()
                 }
-                Text("改写结果").font(Type.section)
+                Text("改写结果").font(Type.heading)
                 Spacer()
                 if let article = vm.resultArticle, !article.spans.isEmpty {
                     Text("\(article.spans.count) 处替换")

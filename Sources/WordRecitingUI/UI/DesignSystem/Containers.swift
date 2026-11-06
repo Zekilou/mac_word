@@ -98,7 +98,9 @@ struct Section<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.sectionTitle) {
             HStack(alignment: .firstTextBaseline, spacing: Space.s) {
-                Text(title).font(Type.section)
+                // 区块标题用 `heading`(17pt)：比行标题(13pt)明显高一档，
+                // 层级才读得出来。原来和行标题只差 2pt。
+                Text(title).font(Type.heading)
                 if let note {
                     InfoHint(text: note)
                 }
